@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	ctrl "github.com/louisroyer/nextmn-srv6-ctrl/runtime"
+	ctrl "github.com/nextmn/srv6-ctrl/runtime"
 	"github.com/urfave/cli/v2"
 )
 
