@@ -7,15 +7,27 @@ package ctrl
 import (
 	"fmt"
 
+	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/louisroyer/go-pfcp-networking/pfcp"
 )
 
 var Ctrl *CtrlConfig
 var PFCPServer *pfcp_networking.PFCPEntityUP
+var HTTPServer *HttpServerEntity
 
 func Run() error {
-	err := createPFCPNode()
-	if err != nil {
+	// setup
+	if Ctrl.Debug != nil && *Ctrl.Debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	// pfcp
+	if err := createPFCPNode(); err != nil {
+		return err
+	}
+	// http
+	if err := createHttpServer(); err != nil {
 		return err
 	}
 	for {
@@ -33,6 +45,20 @@ func createPFCPNode() error {
 	return nil
 }
 
+func createHttpServer() error {
+	if Ctrl.HTTPAddress == nil {
+		return fmt.Errorf("Missing http address")
+	}
+	port := "8080"
+	if Ctrl.HTTPPort != nil {
+		port = *Ctrl.HTTPPort
+	}
+	HTTPServer = NewHttpServerEntity(*Ctrl.HTTPAddress, port)
+	HTTPServer.Start()
+	return nil
+}
+
 func Exit() error {
+	// TODO: stop pfcp & http
 	return nil
 }
