@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
+	"github.com/nextmn/srv6-ctrl/json_api"
 )
 
 type HttpServerEntity struct {
@@ -22,13 +23,13 @@ type HttpServerEntity struct {
 }
 
 type RouterRegistry struct {
-	sync.RWMutex                      // TODO: mutex in Router
-	routers      map[uuid.UUID]Router // TODO map[string]*Router
+	sync.RWMutex
+	routers json_api.RouterMap
 }
 
 func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 	rr := RouterRegistry{
-		routers: make(map[uuid.UUID]Router),
+		routers: make(json_api.RouterMap),
 	}
 	r := gin.Default()
 	r.GET("/status", rr.Status)
@@ -51,7 +52,7 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 func (e *HttpServerEntity) Start() {
 	go func() {
 		if err := e.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			log.Printf("listen: %s\n", err)
 		}
 	}()
 }
@@ -60,14 +61,8 @@ func (e *HttpServerEntity) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if err := e.srv.Shutdown(ctx); err != nil {
-		log.Fatalf("HTTP Server Shutdown: %s\n", err)
+		log.Printf("HTTP Server Shutdown: %s\n", err)
 	}
-}
-
-type Router struct {
-	Locator  string `json:"locator"`  // locator
-	Backbone string `json:"backbone"` // data plane backbone ip address
-	Control  string `json:"control"`  // control plane ip address + port
 }
 
 // get status of the controller
@@ -96,19 +91,20 @@ func (r *RouterRegistry) GetRouter(c *gin.Context) {
 
 // post a router infos
 func (r *RouterRegistry) PostRouter(c *gin.Context) {
-	var router Router
+	var router json_api.Router
 	if err := c.BindJSON(&router); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "could not deserialize", "error": fmt.Sprintf("%v", err)})
 		return
 	}
 	c.Header("Cache-Control", "no-cache")
 	r.Lock()
 	defer r.Unlock()
-
-	// TODO: check if addresses are valid
-	// TODO: check if locator is unused
-	// c.Header("Location", "/routerss/"+id)
-	// c.JSON(http.StatusConflict, gin.H{"message": "already exists"})
-	// return
+	for k, v := range r.routers {
+		if router.Locator.Overlaps(v.Locator) {
+			c.JSON(http.StatusConflict, gin.H{"message": "This locator overlaps with locator of router " + k.String()})
+			return
+		}
+	}
 
 	id, err := uuid.NewV4()
 	if err != nil {
@@ -149,5 +145,5 @@ func (r *RouterRegistry) DeleteRouter(c *gin.Context) {
 }
 
 func (r *RouterRegistry) GetRouters(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, r.routers)
+	c.JSON(http.StatusOK, r.routers)
 }
