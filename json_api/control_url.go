@@ -10,13 +10,13 @@ import (
 	"net/url"
 )
 
-type ControlURL struct {
+type ControlURI struct {
 	url.URL
 }
 
-func (u *ControlURL) UnmarshalText(text []byte) error {
+func (u *ControlURI) UnmarshalText(text []byte) error {
 	if text[len(text)-1] == '/' {
-		return fmt.Errorf("Control URL should not contains trailing slash.")
+		return fmt.Errorf("Control URI should not contains trailing slash.")
 	}
 	if a, err := url.ParseRequestURI(string(text[:])); err != nil {
 		return err
@@ -25,6 +25,6 @@ func (u *ControlURL) UnmarshalText(text []byte) error {
 	}
 	return nil
 }
-func (u ControlURL) MarshalJSON() ([]byte, error) {
+func (u ControlURI) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.String())
 }

@@ -49,7 +49,7 @@ func createHttpServer() error {
 	if Ctrl.HTTPAddress == nil {
 		return fmt.Errorf("Missing http address")
 	}
-	port := "8080"
+	port := "80" // default http port
 	if Ctrl.HTTPPort != nil {
 		port = *Ctrl.HTTPPort
 	}

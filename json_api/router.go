@@ -7,5 +7,5 @@ package json_api
 type Router struct {
 	Locator  Locator    `json:"locator"`  // locator (ipv6 prefix)
 	Backbone BackboneIP `json:"backbone"` // data plane backbone ipv6 address
-	Control  ControlURL `json:"control"`  // url used for control
+	Control  ControlURI `json:"control"`  // url used for control
 }
