@@ -25,8 +25,8 @@ func ParseConf(file string) error {
 }
 
 type CtrlConfig struct {
+	Debug       *bool   `yaml:"debug,omitempty"` // default: false
 	PFCPAddress *string `yaml:"pfcp-address,omitempty"`
 	HTTPAddress *string `yaml:"http-address,omitempty"`
-	HTTPPort    *string `yaml:http-port,omitempty"` // default: 80
-	Debug       *bool   `yaml:debug,omitempty"`
+	HTTPPort    *string `yaml:"http-port,omitempty"` // default: 80
 }
