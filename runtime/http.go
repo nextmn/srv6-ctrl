@@ -14,7 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
-	"github.com/nextmn/srv6-ctrl/json_api"
+	"github.com/nextmn/json-api/jsonapi"
 )
 
 type HttpServerEntity struct {
@@ -24,12 +24,12 @@ type HttpServerEntity struct {
 
 type RouterRegistry struct {
 	sync.RWMutex
-	routers json_api.RouterMap
+	routers jsonapi.RouterMap
 }
 
 func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 	rr := RouterRegistry{
-		routers: make(json_api.RouterMap),
+		routers: make(jsonapi.RouterMap),
 	}
 	r := gin.Default()
 	r.GET("/status", rr.Status)
@@ -91,7 +91,7 @@ func (r *RouterRegistry) GetRouter(c *gin.Context) {
 
 // post a router infos
 func (r *RouterRegistry) PostRouter(c *gin.Context) {
-	var router json_api.Router
+	var router jsonapi.Router
 	if err := c.BindJSON(&router); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "could not deserialize", "error": fmt.Sprintf("%v", err)})
 		return
