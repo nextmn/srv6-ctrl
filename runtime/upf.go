@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	pfcp_networking "github.com/louisroyer/go-pfcp-networking/pfcp"
+	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 )
 
 var Ctrl *CtrlConfig
