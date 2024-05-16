@@ -41,6 +41,10 @@ func createPFCPNode() error {
 		return fmt.Errorf("Missing pfcp address")
 	}
 	PFCPServer = pfcp_networking.NewPFCPEntityUP(*Ctrl.PFCPAddress)
+	pdu_modif_req, err := PFCPServer.GetHandler[]
+	pdu_estab_req, err := PFCPServer.GetHandler[]
+	PFCPServer.AddHandlers(map[pfcputil.MessageType)pfcp_networking.Handler
+
 	PFCPServer.Start()
 	return nil
 }
