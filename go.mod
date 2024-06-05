@@ -7,7 +7,7 @@ toolchain go1.21.8
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/nextmn/go-pfcp-networking v0.0.27
+	github.com/nextmn/go-pfcp-networking v0.0.30
 	github.com/nextmn/json-api v0.0.2
 	github.com/urfave/cli/v2 v2.27.2
 	gopkg.in/yaml.v3 v3.0.1
