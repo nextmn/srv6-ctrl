@@ -45,7 +45,7 @@ func Run() error {
 }
 
 func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
-	srgw_uri := "http://[fd::1]:8080"
+	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
 	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
 	data := map[string]string{
 		"ue_ip":         ue_ip,
@@ -74,7 +74,9 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 }
 
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
+	log.Printf("Into updateRoutersRules")
 	for _, session := range e.GetPFCPSessions() {
+		log.Printf("In for loop…")
 		session.RLock()
 		defer session.RUnlock()
 		for _, pdrid := range session.GetSortedPDRIDs() {
@@ -112,6 +114,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 			}
 		}
 	}
+	log.Printf("Exit updateRoutersRules")
 }
 
 func createPFCPNode() error {
