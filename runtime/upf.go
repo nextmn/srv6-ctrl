@@ -75,6 +75,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	log.Printf("Into updateRoutersRules")
+	e.PrintPFCPRules()
 	for _, session := range e.GetPFCPSessions() {
 		log.Printf("In for loop…")
 		session.RLock()
@@ -82,17 +83,21 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 		for _, pdrid := range session.GetSortedPDRIDs() {
 			pdr, err := session.GetPDR(pdrid)
 			if err != nil {
+				log.Printf("error getting PDR: %s\n", err)
 				continue
 			}
 			farid, err := pdr.FARID()
 			if err != nil {
+				log.Printf("error getting FARid: %s\n", err)
 				continue
 			}
 			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceCore) {
+				log.Printf("sourceiface: %s\n", err)
 				continue
 			}
 			ue_ip_addr, err := pdr.UEIPAddress()
 			if err != nil {
+				log.Printf("error getting ueipaddr: %s\n", err)
 				continue
 			}
 
@@ -101,6 +106,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 
 			far, err := session.GetFAR(farid)
 			if err != nil {
+				log.Printf("error getting far: %s\n", err)
 				continue
 			}
 			ForwardingParametersIe := far.ForwardingParameters()
@@ -108,8 +114,10 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				// FIXME: temporary hack, no IPv6 support
 				gnb_ipv4 := ohc.IPv4Address.String()
 				teid_downlink := ohc.TEID
+				log.Printf("PushRTRRule\n")
 				go pushRTRRule(ue_ipv4, gnb_ipv4, teid_downlink)
 			} else {
+				log.Printf("error getting ohc: %s\n", err)
 				continue
 			}
 		}
