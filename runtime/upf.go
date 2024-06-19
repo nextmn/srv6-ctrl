@@ -91,7 +91,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				log.Printf("error getting FARid: %s\n", err)
 				continue
 			}
-			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceCore) {
+			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceSGiLANN6LAN) {
 				log.Printf("sourceiface: %s\n", err)
 				continue
 			}
