@@ -46,6 +46,8 @@ func Run() error {
 
 func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
+	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
+	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
 	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
 	data := map[string]string{
 		"ue_ip":         ue_ip,
@@ -56,8 +58,41 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	//FIXME: dont send to every node, only to relevant ones
+
 	// TODO: retry on timeout failure
 	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
+	// TODO: retry on timeout failure
+	resp, err = http.Post(edgertr0+"/rules", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
+	// TODO: retry on timeout failure
+	resp, err = http.Post(edgertr1+"/rules", "application/json", bytes.NewBuffer(json_data))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -83,21 +118,25 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 		for _, pdrid := range session.GetSortedPDRIDs() {
 			pdr, err := session.GetPDR(pdrid)
 			if err != nil {
-				log.Printf("error getting PDR: %s\n", err)
+				log.Printf("skip: error getting PDR: %s\n", err)
 				continue
 			}
 			farid, err := pdr.FARID()
 			if err != nil {
-				log.Printf("error getting FARid: %s\n", err)
+				log.Printf("skip: error getting FARid: %s\n", err)
 				continue
 			}
 			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceSGiLANN6LAN) {
-				log.Printf("sourceiface: %s\n", err)
+				if err == nil {
+					log.Println("skip: wrong sourceiface\n")
+				} else {
+					log.Printf("skip: sourceiface: %s\n", err)
+				}
 				continue
 			}
 			ue_ip_addr, err := pdr.UEIPAddress()
 			if err != nil {
-				log.Printf("error getting ueipaddr: %s\n", err)
+				log.Printf("skip: error getting ueipaddr: %s\n", err)
 				continue
 			}
 
@@ -106,7 +145,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 
 			far, err := session.GetFAR(farid)
 			if err != nil {
-				log.Printf("error getting far: %s\n", err)
+				log.Printf("skip: error getting far: %s\n", err)
 				continue
 			}
 			ForwardingParametersIe := far.ForwardingParameters()
@@ -117,7 +156,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				log.Printf("PushRTRRule\n")
 				go pushRTRRule(ue_ipv4, gnb_ipv4, teid_downlink)
 			} else {
-				log.Printf("error getting ohc: %s\n", err)
+				log.Printf("skip: error getting ohc: %s\n", err)
 				continue
 			}
 		}
