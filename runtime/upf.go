@@ -5,13 +5,18 @@
 package ctrl
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcputil "github.com/nextmn/go-pfcp-networking/pfcputil"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
+	"log"
 )
 
 var Ctrl *CtrlConfig
@@ -40,6 +45,32 @@ func Run() error {
 }
 
 func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
+	srgw_uri := "http://[fd::1]:8080"
+	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
+	data := map[string]string{
+		"ue_ip":         ue_ip,
+		"gnb_ip":        gnb_ip,
+		"teid_downlink": strconv.FormatUint(uint64(teid_downlink), 10), // FIXME: serialize using a struct to avoid useless conversion
+	}
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	// TODO: retry on timeout failure
+	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
 }
 
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
