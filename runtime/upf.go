@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcputil "github.com/nextmn/go-pfcp-networking/pfcputil"
+	jsonapi "github.com/nextmn/json-api/jsonapi"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 	"log"
@@ -54,7 +56,39 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		"gnb_ip":        gnb_ip,
 		"teid_downlink": strconv.FormatUint(uint64(teid_downlink), 10), // FIXME: serialize using a struct to avoid useless conversion
 	}
+
+	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
+	if err != nil {
+		log.Printf("Wrong prefix\n")
+		return
+	}
+	// FIXME: don't hardcode!
+	srh := ""
+	if teid_downlink != 1 {
+		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
+		return
+	}
+	switch gnb_ip {
+	case "10.1.4.129": // gnb1
+		srh = "fc00:1:1:0A01:0481:0:0:0100"
+		break
+
+	case "10.1.4.130": // gnb2
+		srh = "fc00:1:1:0A01:0482:0:0:0100"
+		break
+	default:
+		log.Printf("Wrong gnb ip : %s\n", gnb_ip)
+	}
+	data_edge := jsonapi.Rule{
+		Enabled: false,
+		Match:   jsonapi.Match{DstIpPrefix: prefix_ue},
+		Action:  jsonapi.Action{SRH: srh},
+	}
 	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	json_data_edge, err := json.Marshal(data_edge)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -77,7 +111,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//_ := resp.Header.Get("Location")
 	//}
 	// TODO: retry on timeout failure
-	resp, err = http.Post(edgertr0+"/rules", "application/json", bytes.NewBuffer(json_data))
+	resp, err = http.Post(edgertr0+"/rules", "application/json", bytes.NewBuffer(json_data_edge))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -92,7 +126,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//_ := resp.Header.Get("Location")
 	//}
 	// TODO: retry on timeout failure
-	resp, err = http.Post(edgertr1+"/rules", "application/json", bytes.NewBuffer(json_data))
+	resp, err = http.Post(edgertr1+"/rules", "application/json", bytes.NewBuffer(json_data_edge))
 	if err != nil {
 		fmt.Println(err)
 	}
