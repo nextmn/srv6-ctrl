@@ -5,10 +5,18 @@
 package ctrl
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
+	pfcputil "github.com/nextmn/go-pfcp-networking/pfcputil"
+	"github.com/wmnsk/go-pfcp/ie"
+	"github.com/wmnsk/go-pfcp/message"
+	"log"
 )
 
 var Ctrl *CtrlConfig
@@ -36,11 +44,92 @@ func Run() error {
 	return nil
 }
 
+func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
+	srgw_uri := "http://[fd::1]:8080"
+	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
+	data := map[string]string{
+		"ue_ip":         ue_ip,
+		"gnb_ip":        gnb_ip,
+		"teid_downlink": strconv.FormatUint(uint64(teid_downlink), 10), // FIXME: serialize using a struct to avoid useless conversion
+	}
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	// TODO: retry on timeout failure
+	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
+}
+
+func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
+	for _, session := range e.GetPFCPSessions() {
+		session.RLock()
+		defer session.RUnlock()
+		for _, pdrid := range session.GetSortedPDRIDs() {
+			pdr, err := session.GetPDR(pdrid)
+			if err != nil {
+				continue
+			}
+			farid, err := pdr.FARID()
+			if err != nil {
+				continue
+			}
+			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceCore) {
+				continue
+			}
+			ue_ip_addr, err := pdr.UEIPAddress()
+			if err != nil {
+				continue
+			}
+
+			// FIXME: temporary hack, no IPv6 support
+			ue_ipv4 := ue_ip_addr.IPv4Address.String()
+
+			far, err := session.GetFAR(farid)
+			if err != nil {
+				continue
+			}
+			ForwardingParametersIe := far.ForwardingParameters()
+			if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
+				// FIXME: temporary hack, no IPv6 support
+				gnb_ipv4 := ohc.IPv4Address.String()
+				teid_downlink := ohc.TEID
+				go pushRTRRule(ue_ipv4, gnb_ipv4, teid_downlink)
+			} else {
+				continue
+			}
+		}
+	}
+}
+
 func createPFCPNode() error {
 	if Ctrl.PFCPAddress == nil {
 		return fmt.Errorf("Missing pfcp address")
 	}
 	PFCPServer = pfcp_networking.NewPFCPEntityUP(*Ctrl.PFCPAddress)
+	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(msg pfcp_networking.ReceivedMessage) error {
+		err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(msg)
+		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, PFCPServer)
+		return err
+	})
+	PFCPServer.AddHandler(message.MsgTypeSessionModificationRequest, func(msg pfcp_networking.ReceivedMessage) error {
+		err := pfcp_networking.DefaultSessionModificationRequestHandler(msg)
+		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, PFCPServer)
+		return err
+	})
+
 	PFCPServer.Start()
 	return nil
 }
