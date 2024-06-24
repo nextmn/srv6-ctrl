@@ -91,7 +91,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	}
 	data_edge := jsonapi.Rule{
 		Enabled: false,
-		Match:   jsonapi.Match{DstIpPrefix: prefix_ue},
+		Match:   jsonapi.Match{UEIpPrefix: prefix_ue},
 		Action: jsonapi.Action{
 			NextHop: *nh,
 			SRH:     *srh_json,
