@@ -79,10 +79,23 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	default:
 		log.Printf("Wrong gnb ip : %s\n", gnb_ip)
 	}
+	nh, err := jsonapi.NewNextHop(srh)
+	if err != nil {
+		log.Printf("err creation of NextHop: %s\n", err)
+		return
+	}
+	srh_json, err := jsonapi.NewSRH([]string{srh})
+	if err != nil {
+		log.Printf("err creation of SRH: %s\n", err)
+		return
+	}
 	data_edge := jsonapi.Rule{
 		Enabled: false,
 		Match:   jsonapi.Match{DstIpPrefix: prefix_ue},
-		Action:  jsonapi.Action{SRH: srh},
+		Action: jsonapi.Action{
+			NextHop: *nh,
+			SRH:     *srh_json,
+		},
 	}
 	json_data, err := json.Marshal(data)
 	if err != nil {
