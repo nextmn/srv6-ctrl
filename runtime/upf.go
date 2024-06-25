@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
@@ -51,11 +50,6 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
 	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
 	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
-	data := map[string]string{
-		"ue_ip":         ue_ip,
-		"gnb_ip":        gnb_ip,
-		"teid_downlink": strconv.FormatUint(uint64(teid_downlink), 10), // FIXME: serialize using a struct to avoid useless conversion
-	}
 
 	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
 	if err != nil {
@@ -63,41 +57,66 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		return
 	}
 	// FIXME: don't hardcode!
-	srh := ""
+	srh_downlink := ""
+	srh_uplink := ""
 	if teid_downlink != 1 {
 		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
 		return
 	}
 	switch gnb_ip {
 	case "10.1.4.129": // gnb1
-		srh = "fc00:1:1:0A01:0481:0:0:0100"
+		srh_downlink = "fc00:1:1:0A01:0481:0:0:0100"
 		break
 
 	case "10.1.4.130": // gnb2
-		srh = "fc00:1:1:0A01:0482:0:0:0100"
+		srh_downlink = "fc00:1:1:0A01:0482:0:0:0100"
 		break
 	default:
 		log.Printf("Wrong gnb ip : %s\n", gnb_ip)
 	}
-	nh, err := jsonapi.NewNextHop(srh)
+	nh_downlink, err := jsonapi.NewNextHop(srh_downlink)
 	if err != nil {
-		log.Printf("err creation of NextHop: %s\n", err)
+		log.Printf("err creation of NextHop downlink: %s\n", err)
 		return
 	}
-	srh_json, err := jsonapi.NewSRH([]string{srh})
+
+	nh_uplink, err := jsonapi.NewNextHop(srh_uplink)
 	if err != nil {
-		log.Printf("err creation of SRH: %s\n", err)
+		log.Printf("err creation of NextHop uplink: %s\n", err)
 		return
 	}
+	srh_downlink_json, err := jsonapi.NewSRH([]string{srh_downlink})
+	if err != nil {
+		log.Printf("err creation of SRH downlink: %s\n", err)
+		return
+	}
+	srh_uplink_json, err := jsonapi.NewSRH([]string{srh_uplink})
+	if err != nil {
+		log.Printf("err creation of SRH uplikn: %s\n", err)
+		return
+	}
+
 	data_edge := jsonapi.Rule{
 		Enabled: false,
 		Match:   jsonapi.Match{UEIpPrefix: prefix_ue},
 		Action: jsonapi.Action{
-			NextHop: *nh,
-			SRH:     *srh_json,
+			NextHop: *nh_downlink,
+			SRH:     *srh_downlink_json,
 		},
 	}
-	json_data, err := json.Marshal(data)
+
+	data_gw := jsonapi.Rule{
+		Enabled: false,
+		Match: jsonapi.Match{
+			UEIpPrefix: prefix_ue,
+			//	GNBIpPrefix: prefix_gnb, // TODO
+		},
+		Action: jsonapi.Action{
+			NextHop: *nh_uplink,
+			SRH:     *srh_uplink_json,
+		},
+	}
+	json_data_gw, err := json.Marshal(data_gw)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -109,7 +128,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//FIXME: dont send to every node, only to relevant ones
 
 	// TODO: retry on timeout failure
-	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data))
+	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw))
 	if err != nil {
 		fmt.Println(err)
 	}
