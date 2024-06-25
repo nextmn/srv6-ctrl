@@ -58,7 +58,8 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	}
 	// FIXME: don't hardcode!
 	srh_downlink := ""
-	srh_uplink := ""
+	srh_uplink_1 := "::" // FIXME
+	srh_uplink_2 := "::" // FIXME
 	if teid_downlink != 1 {
 		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
 		return
@@ -80,9 +81,14 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		return
 	}
 
-	nh_uplink, err := jsonapi.NewNextHop(srh_uplink)
+	nh_uplink1, err := jsonapi.NewNextHop(srh_uplink_1)
 	if err != nil {
-		log.Printf("err creation of NextHop uplink: %s\n", err)
+		log.Printf("err creation of NextHop uplink1: %s\n", err)
+		return
+	}
+	nh_uplink2, err := jsonapi.NewNextHop(srh_uplink_2)
+	if err != nil {
+		log.Printf("err creation of NextHop uplink2: %s\n", err)
 		return
 	}
 	srh_downlink_json, err := jsonapi.NewSRH([]string{srh_downlink})
@@ -90,9 +96,14 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		log.Printf("err creation of SRH downlink: %s\n", err)
 		return
 	}
-	srh_uplink_json, err := jsonapi.NewSRH([]string{srh_uplink})
+	srh_uplink1_json, err := jsonapi.NewSRH([]string{srh_uplink_1})
 	if err != nil {
-		log.Printf("err creation of SRH uplikn: %s\n", err)
+		log.Printf("err creation of SRH uplink1: %s\n", err)
+		return
+	}
+	srh_uplink2_json, err := jsonapi.NewSRH([]string{srh_uplink_2})
+	if err != nil {
+		log.Printf("err creation of SRH uplink2: %s\n", err)
 		return
 	}
 
@@ -105,18 +116,33 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		},
 	}
 
-	data_gw := jsonapi.Rule{
+	data_gw1 := jsonapi.Rule{
 		Enabled: false,
 		Match: jsonapi.Match{
 			UEIpPrefix: prefix_ue,
 			//	GNBIpPrefix: prefix_gnb, // TODO
 		},
 		Action: jsonapi.Action{
-			NextHop: *nh_uplink,
-			SRH:     *srh_uplink_json,
+			NextHop: *nh_uplink1,
+			SRH:     *srh_uplink1_json,
 		},
 	}
-	json_data_gw, err := json.Marshal(data_gw)
+	json_data_gw1, err := json.Marshal(data_gw1)
+	if err != nil {
+		fmt.Println(err)
+	}
+	data_gw2 := jsonapi.Rule{
+		Enabled: false,
+		Match: jsonapi.Match{
+			UEIpPrefix: prefix_ue,
+			//	GNBIpPrefix: prefix_gnb, // TODO
+		},
+		Action: jsonapi.Action{
+			NextHop: *nh_uplink2,
+			SRH:     *srh_uplink2_json,
+		},
+	}
+	json_data_gw2, err := json.Marshal(data_gw2)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -128,7 +154,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//FIXME: dont send to every node, only to relevant ones
 
 	// TODO: retry on timeout failure
-	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw))
+	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw1))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -142,6 +168,23 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//OK: store resource
 	//_ := resp.Header.Get("Location")
 	//}
+
+	// TODO: retry on timeout failure
+	resp, err = http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw2))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
+
 	// TODO: retry on timeout failure
 	resp, err = http.Post(edgertr0+"/rules", "application/json", bytes.NewBuffer(json_data_edge))
 	if err != nil {
