@@ -89,7 +89,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	}
 	// FIXME: don't hardcode!
 	srh_downlink := ""
-	srh_uplink_1 := "fc00:1:1::" // FIXME
+	srh_uplink_1 := "fc00:2:1::" // FIXME
 	srh_uplink_2 := "fc00:3:1::" // FIXME
 	if teid_downlink != 1 {
 		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
