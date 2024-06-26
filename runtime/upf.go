@@ -49,7 +49,9 @@ func Run() error {
 func isReady(name string, uri string) bool {
 	resp, err := http.Get(uri + "/status")
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("%s is not ready: waiting…\n", name)
+		time.Sleep(500 * time.Millisecond)
+		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
