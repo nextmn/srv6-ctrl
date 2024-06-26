@@ -45,11 +45,31 @@ func Run() error {
 	return nil
 }
 
+func waitUntilReady(name string, uri string) {
+	for {
+		resp, err := http.Get(uri + "/status")
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			log.Printf("%s is not ready: waiting…\n", name)
+		} else {
+			return
+		}
+	}
+}
+
 func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
 	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
 	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
 	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
+
+	// FIXME: Temporary hack: wait for routers to be ready
+	waitUntilReady("srgw0", srgw_uri)
+	waitUntilReady("r0", edgertr0)
+	waitUntilReady("r1", edgertr1)
 
 	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
 	if err != nil {
