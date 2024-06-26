@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
@@ -45,16 +46,24 @@ func Run() error {
 	return nil
 }
 
+func isReady(name string, uri string) bool {
+	resp, err := http.Get(uri + "/status")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("%s is not ready: waiting…\n", name)
+		time.Sleep(500 * time.Millisecond)
+		return false
+	} else {
+		return true
+	}
+}
+
 func waitUntilReady(name string, uri string) {
 	for {
-		resp, err := http.Get(uri + "/status")
-		if err != nil {
-			fmt.Println(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			log.Printf("%s is not ready: waiting…\n", name)
-		} else {
+		if ok := isReady(name, uri); ok {
 			return
 		}
 	}
