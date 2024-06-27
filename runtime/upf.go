@@ -84,9 +84,15 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
 	if err != nil {
-		log.Printf("Wrong prefix\n")
+		log.Printf("Wrong prefix for UE\n")
 		return
 	}
+	prefix_gnb, err := netip.MustParseAddr(gnb_ip).Prefix(32) // FIXME: don't trust user input => ParseAddr
+	if err != nil {
+		log.Printf("Wrong prefix for Gnb\n")
+		return
+	}
+
 	// FIXME: don't hardcode!
 	srh_downlink := ""
 	srh_uplink_1 := "fc00:2:1::" // FIXME
@@ -140,6 +146,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 	data_edge := jsonapi.Rule{
 		Enabled: false,
+		Type:    "downlink",
 		Match:   jsonapi.Match{UEIpPrefix: prefix_ue},
 		Action: jsonapi.Action{
 			NextHop: *nh_downlink,
@@ -149,9 +156,10 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 	data_gw1 := jsonapi.Rule{
 		Enabled: false,
+		Type:    "uplink",
 		Match: jsonapi.Match{
-			UEIpPrefix: prefix_ue,
-			//	GNBIpPrefix: prefix_gnb, // TODO
+			UEIpPrefix:  prefix_ue,
+			GNBIpPrefix: prefix_gnb, // TODO
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink1,
@@ -164,9 +172,10 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	}
 	data_gw2 := jsonapi.Rule{
 		Enabled: false,
+		Type:    "uplink",
 		Match: jsonapi.Match{
-			UEIpPrefix: prefix_ue,
-			//	GNBIpPrefix: prefix_gnb, // TODO
+			UEIpPrefix:  prefix_ue,
+			GNBIpPrefix: prefix_gnb, // TODO
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink2,
