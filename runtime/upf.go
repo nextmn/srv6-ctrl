@@ -97,6 +97,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	srh_downlink := ""
 	srh_uplink_1 := "fc00:2:1::" // FIXME
 	srh_uplink_2 := "fc00:3:1::" // FIXME
+	rr := "fc00:4:1::"           //FIXME
 	if teid_downlink != 1 {
 		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
 		return
@@ -112,18 +113,18 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	default:
 		log.Printf("Wrong gnb ip : %s\n", gnb_ip)
 	}
-	nh_downlink, err := jsonapi.NewNextHop(srh_downlink)
+	nh_downlink, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		log.Printf("err creation of NextHop downlink: %s\n", err)
 		return
 	}
 
-	nh_uplink1, err := jsonapi.NewNextHop(srh_uplink_1)
+	nh_uplink1, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		log.Printf("err creation of NextHop uplink1: %s\n", err)
 		return
 	}
-	nh_uplink2, err := jsonapi.NewNextHop(srh_uplink_2)
+	nh_uplink2, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		log.Printf("err creation of NextHop uplink2: %s\n", err)
 		return
