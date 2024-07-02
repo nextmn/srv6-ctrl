@@ -22,7 +22,7 @@ install:
 	$(INSTALL) bash-completion/completions/srv6-ctrl $(DESTDIR)$(BASHCOMPLETIONSDIR)/srv6-ctrl
 	@echo "================================="
 	@echo ">> Now run the following command:"
-	@echo "\tsource $(DESTDIR)$(BASHCOMPLETIONSDIR)/srv6-ctrl"
+	@echo -e "\tsource $(DESTDIR)$(BASHCOMPLETIONSDIR)/srv6-ctrl"
 	@echo "================================="
 uninstall:
 	$(RM) $(DESTDIR)$(bindir)/srv6-ctrl
