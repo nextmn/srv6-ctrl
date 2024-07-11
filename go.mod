@@ -1,8 +1,6 @@
 module github.com/nextmn/srv6-ctrl
 
-go 1.21
-
-toolchain go1.21.8
+go 1.22
 
 require (
 	github.com/gin-gonic/gin v1.10.0
