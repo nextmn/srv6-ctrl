@@ -12,13 +12,14 @@ import (
 	"net/netip"
 	"time"
 
+	"log"
+
 	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcputil "github.com/nextmn/go-pfcp-networking/pfcputil"
 	jsonapi "github.com/nextmn/json-api/jsonapi"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
-	"log"
 )
 
 var Ctrl *CtrlConfig
@@ -318,7 +319,7 @@ func createPFCPNode() error {
 	if Ctrl.PFCPAddress == nil {
 		return fmt.Errorf("Missing pfcp address")
 	}
-	PFCPServer = pfcp_networking.NewPFCPEntityUP(*Ctrl.PFCPAddress)
+	PFCPServer = pfcp_networking.NewPFCPEntityUP(*Ctrl.PFCPAddress, *Ctrl.PFCPAddress)
 	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(msg pfcp_networking.ReceivedMessage) error {
 		err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(msg)
 		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, PFCPServer)
