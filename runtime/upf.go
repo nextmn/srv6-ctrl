@@ -277,7 +277,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				log.Printf("skip: error getting FARid: %s\n", err)
 				continue
 			}
-			if source_iface, err := pdr.SourceInterface(); (err != nil) || (source_iface != ie.SrcInterfaceSGiLANN6LAN) {
+			if source_iface, err := pdr.SourceInterface(); (err != nil) || ((source_iface != ie.SrcInterfaceSGiLANN6LAN) && (source_iface != ie.SrcInterfaceCore)) {
 				if err == nil {
 					log.Println("skip: wrong sourceiface\n")
 				} else {
