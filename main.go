@@ -5,27 +5,24 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
 
-	ctrl "github.com/nextmn/srv6-ctrl/runtime"
+	"github.com/nextmn/srv6-ctrl/internal/app"
+	"github.com/nextmn/srv6-ctrl/internal/config"
+	"github.com/nextmn/srv6-ctrl/internal/logger"
+
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
-func initSignals() {
-	cancelChan := make(chan os.Signal, 1)
-	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
-	func(_ os.Signal) {}(<-cancelChan)
-	ctrl.Exit()
-	os.Exit(0)
-}
-
 func main() {
-	log.SetPrefix("[nextmn-upf] ")
-	var config string
+	logger.Init("Nextm-SRv6-ctrl ")
+	var config_file string
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
 	app := &cli.App{
 		Name:                 "NextMN-SRv6-ctrl",
 		Usage:                "Controller for NextMN-SRv6",
@@ -38,29 +35,27 @@ func main() {
 				Name:        "config",
 				Aliases:     []string{"c"},
 				Usage:       "Load configuration from `FILE`",
-				Destination: &config,
+				Destination: &config_file,
 				Required:    true,
 				DefaultText: "not set",
 			},
 		},
 		Action: func(c *cli.Context) error {
-			err := ctrl.ParseConf(config)
+			conf, err := config.ParseConf(config_file)
 			if err != nil {
-				fmt.Println("Error loading config, exiting…")
-				os.Exit(1)
+				logrus.WithContext(ctx).WithError(err).Fatal("Error loading config, exiting…")
 			}
-			err = ctrl.Run()
-			if err != nil {
-				fmt.Println("Error while running, exiting…")
-				log.Fatal(err)
-				os.Exit(2)
+			if conf.Logger != nil {
+				logrus.SetLevel(conf.Logger.Level)
+			}
+
+			if err := app.NewSetup(conf).Run(ctx); err != nil {
+				logrus.WithError(err).Fatal("Error while running, exiting…")
 			}
 			return nil
 		},
 	}
-	go initSignals()
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
+	if err := app.Run(os.Args); err != nil {
+		logrus.Fatal(err)
 	}
 }

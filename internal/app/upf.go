@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
-package ctrl
+package app
 
 import (
 	"bytes"
@@ -12,51 +12,38 @@ import (
 	"net/netip"
 	"time"
 
-	"log"
+	"github.com/nextmn/srv6-ctrl/internal/config"
 
-	"github.com/gin-gonic/gin"
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
-	pfcputil "github.com/nextmn/go-pfcp-networking/pfcputil"
-	jsonapi "github.com/nextmn/json-api/jsonapi"
+	"github.com/nextmn/go-pfcp-networking/pfcputil"
+	"github.com/nextmn/json-api/jsonapi"
+
+	"github.com/sirupsen/logrus"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 )
 
-var Ctrl *CtrlConfig
-var PFCPServer *pfcp_networking.PFCPEntityUP
-var HTTPServer *HttpServerEntity
-
-func Run() error {
-	// setup
-	if Ctrl.Debug != nil && *Ctrl.Debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-	// pfcp
-	if err := createPFCPNode(); err != nil {
-		return err
-	}
-	// http
-	if err := createHttpServer(); err != nil {
-		return err
-	}
-	for {
-		select {}
-	}
-	return nil
-}
+const UserAgent = "go-github-nextmn-srv6-ctrl"
 
 func isReady(name string, uri string) bool {
-	resp, err := http.Get(uri + "/status")
+	client := http.Client{}
+	req, err := http.NewRequest(http.MethodGet, uri+"/status", nil)
 	if err != nil {
-		log.Printf("%s is not ready: waiting…\n", name)
+		logrus.WithError(err).Error("Error while creating http get request")
+		return false
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Charset", "utf-8")
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{"remote-server": name}).WithError(err).Info("Remote server is not ready: waiting…")
 		time.Sleep(500 * time.Millisecond)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		log.Printf("%s is not ready: waiting…\n", name)
+		logrus.WithFields(logrus.Fields{"remote-server": name}).WithError(err).Info("Remote server is not ready: waiting…")
 		time.Sleep(500 * time.Millisecond)
 		return false
 	} else {
@@ -76,7 +63,11 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
 	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
 	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
-	log.Printf("Pushing Router Rule: %s %s %d", ue_ip, gnb_ip, teid_downlink)
+	logrus.WithFields(logrus.Fields{
+		"ue-ip":         ue_ip,
+		"gnb-ip":        gnb_ip,
+		"teid-downlink": teid_downlink,
+	}).Info("Pushing Router Rule")
 
 	// FIXME: Temporary hack: wait for routers to be ready
 	waitUntilReady("srgw0", srgw_uri)
@@ -85,12 +76,12 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
 	if err != nil {
-		log.Printf("Wrong prefix for UE\n")
+		logrus.WithFields(logrus.Fields{"ue-ip": ue_ip}).WithError(err).Error("Wrong prefix for UE")
 		return
 	}
 	prefix_gnb, err := netip.MustParseAddr(gnb_ip).Prefix(32) // FIXME: don't trust user input => ParseAddr
 	if err != nil {
-		log.Printf("Wrong prefix for Gnb\n")
+		logrus.WithFields(logrus.Fields{"gnb-ip": gnb_ip}).WithError(err).Error("Wrong prefix for Gnb")
 		return
 	}
 
@@ -100,7 +91,10 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	srh_uplink_2 := "fc00:3:1::" // FIXME
 	rr := "fc00:4:1::"           //FIXME
 	if teid_downlink != 1 {
-		log.Printf("downlink TEID different than hardcoded one! It's time to write more code :(")
+		logrus.WithFields(logrus.Fields{
+			"hardcoded-teid-downlink": 1,
+			"actual-teid-downlink":    teid_downlink,
+		}).Error("downlink TEID different than hardcoded one! It's time to write more code :(")
 		return
 	}
 	switch gnb_ip {
@@ -112,37 +106,37 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		srh_downlink = "fc00:1:1:0A01:0482:0:0:0100"
 		break
 	default:
-		log.Printf("Wrong gnb ip : %s\n", gnb_ip)
+		logrus.WithFields(logrus.Fields{"gnb-ip": gnb_ip}).Error("Wrong gnb ip")
 	}
 	nh_downlink, err := jsonapi.NewNextHop(rr)
 	if err != nil {
-		log.Printf("err creation of NextHop downlink: %s\n", err)
+		logrus.WithError(err).Error("Creation of NextHop downlink failed")
 		return
 	}
 
 	nh_uplink1, err := jsonapi.NewNextHop(rr)
 	if err != nil {
-		log.Printf("err creation of NextHop uplink1: %s\n", err)
+		logrus.WithError(err).Error("Creation of NextHop uplink 1 failed")
 		return
 	}
 	nh_uplink2, err := jsonapi.NewNextHop(rr)
 	if err != nil {
-		log.Printf("err creation of NextHop uplink2: %s\n", err)
+		logrus.WithError(err).Error("Creation of NextHop uplink 2 failed")
 		return
 	}
 	srh_downlink_json, err := jsonapi.NewSRH([]string{srh_downlink})
 	if err != nil {
-		log.Printf("err creation of SRH downlink: %s\n", err)
+		logrus.WithError(err).Error("Creation of SRH downlink failed")
 		return
 	}
 	srh_uplink1_json, err := jsonapi.NewSRH([]string{srh_uplink_1})
 	if err != nil {
-		log.Printf("err creation of SRH uplink1: %s\n", err)
+		logrus.WithError(err).Error("Creation of SRH uplink 1 failed")
 		return
 	}
 	srh_uplink2_json, err := jsonapi.NewSRH([]string{srh_uplink_2})
 	if err != nil {
-		log.Printf("err creation of SRH uplink2: %s\n", err)
+		logrus.WithError(err).Error("Creation of SRH uplink 2 failed")
 		return
 	}
 
@@ -194,9 +188,16 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	}
 
 	//FIXME: dont send to every node, only to relevant ones
+	client := http.Client{}
 
 	// TODO: retry on timeout failure
-	resp, err := http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw1))
+	req, err := http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw1))
+	if err != nil {
+		fmt.Println(err)
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -212,7 +213,13 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//}
 
 	// TODO: retry on timeout failure
-	resp, err = http.Post(srgw_uri+"/rules", "application/json", bytes.NewBuffer(json_data_gw2))
+	req, err = http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw2))
+	if err != nil {
+		fmt.Println(err)
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -228,7 +235,13 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//}
 
 	// TODO: retry on timeout failure
-	resp, err = http.Post(edgertr0+"/rules", "application/json", bytes.NewBuffer(json_data_edge))
+	req, err = http.NewRequest(http.MethodPost, edgertr0+"/rules", bytes.NewBuffer(json_data_edge))
+	if err != nil {
+		fmt.Println(err)
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -243,7 +256,13 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//_ := resp.Header.Get("Location")
 	//}
 	// TODO: retry on timeout failure
-	resp, err = http.Post(edgertr1+"/rules", "application/json", bytes.NewBuffer(json_data_edge))
+	req, err = http.NewRequest(http.MethodPost, edgertr1+"/rules", bytes.NewBuffer(json_data_edge))
+	if err != nil {
+		fmt.Println(err)
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -260,34 +279,34 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 }
 
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
-	log.Printf("Into updateRoutersRules")
+	logrus.Debug("Into updateRoutersRules")
 	e.PrintPFCPRules()
 	for _, session := range e.GetPFCPSessions() {
-		log.Printf("In for loop…")
+		logrus.Debug("In for loop…")
 		session.RLock()
 		defer session.RUnlock()
 		for _, pdrid := range session.GetSortedPDRIDs() {
 			pdr, err := session.GetPDR(pdrid)
 			if err != nil {
-				log.Printf("skip: error getting PDR: %s\n", err)
+				logrus.WithError(err).Debug("skip: error getting PDR")
 				continue
 			}
 			farid, err := pdr.FARID()
 			if err != nil {
-				log.Printf("skip: error getting FARid: %s\n", err)
+				logrus.WithError(err).Debug("skip: error getting FARid")
 				continue
 			}
 			if source_iface, err := pdr.SourceInterface(); (err != nil) || ((source_iface != ie.SrcInterfaceSGiLANN6LAN) && (source_iface != ie.SrcInterfaceCore)) {
 				if err == nil {
-					log.Println("skip: wrong sourceiface\n")
+					logrus.WithFields(logrus.Fields{"source-iface": source_iface}).Debug("skip: wrong source-iface")
 				} else {
-					log.Printf("skip: sourceiface: %s\n", err)
+					logrus.WithError(err).Debug("skip: error getting source-iface")
 				}
 				continue
 			}
 			ue_ip_addr, err := pdr.UEIPAddress()
 			if err != nil {
-				log.Printf("skip: error getting ueipaddr: %s\n", err)
+				logrus.WithError(err).Debug("skip: error getting ueipaddr")
 				continue
 			}
 
@@ -296,7 +315,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 
 			far, err := session.GetFAR(farid)
 			if err != nil {
-				log.Printf("skip: error getting far: %s\n", err)
+				logrus.WithError(err).Debug("skip: error getting far")
 				continue
 			}
 			ForwardingParametersIe := far.ForwardingParameters()
@@ -304,22 +323,23 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				// FIXME: temporary hack, no IPv6 support
 				gnb_ipv4 := ohc.IPv4Address.String()
 				teid_downlink := ohc.TEID
-				log.Printf("PushRTRRule\n")
+				logrus.WithFields(logrus.Fields{
+					"ue-ipv4":       ue_ipv4,
+					"gnb-ipv4":      gnb_ipv4,
+					"teid-downlink": teid_downlink,
+				}).Debug("PushRTRRule")
 				go pushRTRRule(ue_ipv4, gnb_ipv4, teid_downlink)
 			} else {
-				log.Printf("skip: error getting ohc: %s\n", err)
+				logrus.WithError(err).Debug("skip: error getting ohc")
 				continue
 			}
 		}
 	}
-	log.Printf("Exit updateRoutersRules")
+	logrus.Debug("Exit updateRoutersRules")
 }
 
-func createPFCPNode() error {
-	if Ctrl.PFCPAddress == nil {
-		return fmt.Errorf("Missing pfcp address")
-	}
-	PFCPServer = pfcp_networking.NewPFCPEntityUP(*Ctrl.PFCPAddress, *Ctrl.PFCPAddress)
+func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
+	PFCPServer := pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress, conf.PFCPAddress)
 	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(msg pfcp_networking.ReceivedMessage) error {
 		err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(msg)
 		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, PFCPServer)
@@ -330,25 +350,14 @@ func createPFCPNode() error {
 		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, PFCPServer)
 		return err
 	})
-
-	PFCPServer.Start()
-	return nil
+	return PFCPServer
 }
 
-func createHttpServer() error {
-	if Ctrl.HTTPAddress == nil {
-		return fmt.Errorf("Missing http address")
-	}
+func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
 	port := "80" // default http port
-	if Ctrl.HTTPPort != nil {
-		port = *Ctrl.HTTPPort
+	if conf.HTTPPort != nil {
+		port = *conf.HTTPPort
 	}
-	HTTPServer = NewHttpServerEntity(*Ctrl.HTTPAddress, port)
-	HTTPServer.Start()
-	return nil
-}
-
-func Exit() error {
-	// TODO: stop pfcp & http
-	return nil
+	HTTPServer := NewHttpServerEntity(conf.HTTPAddress, port)
+	return HTTPServer
 }

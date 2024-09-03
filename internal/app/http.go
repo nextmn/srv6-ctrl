@@ -2,12 +2,11 @@
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
-package ctrl
+package app
 
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
 	"github.com/nextmn/json-api/jsonapi"
+	"github.com/sirupsen/logrus"
 )
 
 type HttpServerEntity struct {
@@ -31,6 +31,7 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 	rr := RouterRegistry{
 		routers: make(jsonapi.RouterMap),
 	}
+	// TODO: gin.SetMode(gin.DebugMode) / gin.SetMode(gin.ReleaseMode) depending on log level
 	r := gin.Default()
 	r.GET("/status", rr.Status)
 	r.GET("/routers", rr.GetRouters)
@@ -38,7 +39,7 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 	r.DELETE("/routers/:uuid", rr.DeleteRouter)
 	r.POST("/routers", rr.PostRouter)
 	httpAddr := fmt.Sprintf("[%s]:%s", addr, port)
-	log.Printf("HTTP Server will be listenning on %s\n", httpAddr)
+	logrus.WithFields(logrus.Fields{"http-addr": httpAddr}).Info("HTTP Server created")
 	e := HttpServerEntity{
 		routers: &rr,
 		srv: &http.Server{
@@ -52,16 +53,16 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 func (e *HttpServerEntity) Start() {
 	go func() {
 		if err := e.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("listen: %s\n", err)
+			logrus.WithError(err).Error("Htte Server error")
 		}
 	}()
 }
 
 func (e *HttpServerEntity) Stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) // context.Background() is already Done()
 	defer cancel()
 	if err := e.srv.Shutdown(ctx); err != nil {
-		log.Printf("HTTP Server Shutdown: %s\n", err)
+		logrus.WithError(err).Info("HTTP Server Shutdown")
 	}
 }
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
-package ctrl
+package config
 
 import (
 	"io/ioutil"
@@ -11,22 +11,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func ParseConf(file string) error {
+func ParseConf(file string) (*CtrlConfig, error) {
+	var conf CtrlConfig
 	path, err := filepath.Abs(file)
+	if err != nil {
+		return nil, err
+	}
 	yamlFile, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = yaml.Unmarshal(yamlFile, &Ctrl)
-	if err != nil {
-		return err
+	if err = yaml.Unmarshal(yamlFile, &conf); err != nil {
+		return nil, err
 	}
-	return nil
+	return &conf, nil
 }
 
 type CtrlConfig struct {
 	Debug       *bool   `yaml:"debug,omitempty"` // default: false
-	PFCPAddress *string `yaml:"pfcp-address,omitempty"`
-	HTTPAddress *string `yaml:"http-address,omitempty"`
+	PFCPAddress string  `yaml:"pfcp-address"`
+	HTTPAddress string  `yaml:"http-address"`
 	HTTPPort    *string `yaml:"http-port,omitempty"` // default: 80
+	Logger      *Logger `yaml:"logger,omitempty"`
 }

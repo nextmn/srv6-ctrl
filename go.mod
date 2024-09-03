@@ -7,6 +7,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/nextmn/go-pfcp-networking v0.0.32
 	github.com/nextmn/json-api v0.0.6
+	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli/v2 v2.27.4
 	github.com/wmnsk/go-pfcp v0.0.24
 	gopkg.in/yaml.v3 v3.0.1
