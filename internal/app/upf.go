@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -280,7 +281,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
-	e.PrintPFCPRules()
+	e.LogPFCPRules()
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
 		session.RLock()
@@ -340,15 +341,15 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 
 func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
 	PFCPServer := pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress, conf.PFCPAddress)
-	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(msg pfcp_networking.ReceivedMessage) error {
-		err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(msg)
+	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+		out, err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(ctx, msg)
 		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, PFCPServer)
-		return err
+		return out, err
 	})
-	PFCPServer.AddHandler(message.MsgTypeSessionModificationRequest, func(msg pfcp_networking.ReceivedMessage) error {
-		err := pfcp_networking.DefaultSessionModificationRequestHandler(msg)
+	PFCPServer.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+		out, err := pfcp_networking.DefaultSessionModificationRequestHandler(ctx, msg)
 		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, PFCPServer)
-		return err
+		return out, err
 	})
 	return PFCPServer
 }

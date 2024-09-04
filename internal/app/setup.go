@@ -26,12 +26,12 @@ func NewSetup(conf *config.CtrlConfig) Setup {
 }
 
 func (s Setup) Run(ctx context.Context) error {
-	s.PFCPServer.Start()
+	s.PFCPServer.ListenAndServeContext(ctx)
 	s.HTTPServer.Start()
 	select {
 	case <-ctx.Done():
 		s.HTTPServer.Stop()
-		// TODO: stop pfcp node
+		s.PFCPServer.Close()
 		os.Exit(0) // currently, we will force exit instead
 		return nil
 	}
