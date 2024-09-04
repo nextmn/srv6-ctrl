@@ -25,6 +25,9 @@ func NewSetup(conf *config.CtrlConfig) Setup {
 }
 
 func (s Setup) Run(ctx context.Context) error {
+	if err := PFCPServerAddHooks(s.PFCPServer); err != nil {
+		return err
+	}
 	StartPFCPServer(ctx, s.PFCPServer)
 	s.HTTPServer.Start()
 	select {

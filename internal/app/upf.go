@@ -340,18 +340,24 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 }
 
 func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
-	PFCPServer := pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress, conf.PFCPAddress)
-	PFCPServer.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress, conf.PFCPAddress)
+}
+func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP) error {
+	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(ctx, msg)
-		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, PFCPServer)
+		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, s)
 		return out, err
-	})
-	PFCPServer.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+	}); err != nil {
+		return err
+	}
+	if err := s.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionModificationRequestHandler(ctx, msg)
-		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, PFCPServer)
+		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, s)
 		return out, err
-	})
-	return PFCPServer
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
@@ -364,10 +370,10 @@ func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
 }
 
 func StartPFCPServer(ctx context.Context, srv *pfcp_networking.PFCPEntityUP) {
-	go func() {
+	go func(ctx context.Context, srv *pfcp_networking.PFCPEntityUP) {
 		logrus.Info("Starting PFCP Server")
 		if err := srv.ListenAndServeContext(ctx); err != nil {
 			logrus.WithError(err).Error("PFCP Server Shutdown")
 		}
-	}()
+	}(ctx, srv)
 }

@@ -56,6 +56,8 @@ github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904144530-a6a79aa00fe7 h1:pg
 github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904144530-a6a79aa00fe7/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
 github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904150123-d09ddba289c3 h1:WtaxCyEuJAO4ejF/c5IVfwL1NBA2Of0J9m5YqcNm+wY=
 github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904150123-d09ddba289c3/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
+github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904155024-60beb02394e7 h1:RcLkcfmF+8cihGkZkTrDoYIhiPzFXgDlC5FOrVJhNHs=
+github.com/nextmn/go-pfcp-networking v0.0.33-0.20240904155024-60beb02394e7/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
 github.com/nextmn/json-api v0.0.6 h1:YvYWarvCSX9pHyexy9uOR2IK8xpnsKkIqAALG3k+XMg=
 github.com/nextmn/json-api v0.0.6/go.mod h1:gi9IhsD+FFg7iEnJaZtEaY1WlZkQ75KBBk0z5FmSJBU=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
