@@ -1,4 +1,5 @@
 pfcp-address: "10.0.60.3"
 http-address: "192.0.2.2"
 http-port: "8080"
-debug: true
+logger:
+  level: info
