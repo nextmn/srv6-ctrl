@@ -25,7 +25,7 @@ func NewSetup(conf *config.CtrlConfig) Setup {
 }
 
 func (s Setup) Run(ctx context.Context) error {
-	s.PFCPServer.ListenAndServeContext(ctx)
+	StartPFCPServer(ctx, s.PFCPServer)
 	s.HTTPServer.Start()
 	select {
 	case <-ctx.Done():
