@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	logger.Init("Nextm-SRv6-ctrl ")
+	logger.Init("Nextm-SRv6-ctrl")
 	var config_file string
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
