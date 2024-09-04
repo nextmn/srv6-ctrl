@@ -52,6 +52,7 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 
 func (e *HttpServerEntity) Start() {
 	go func() {
+		logrus.Info("Starting HTTP Server")
 		if err := e.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logrus.WithError(err).Error("Http Server error")
 		}
