@@ -362,3 +362,11 @@ func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
 	HTTPServer := NewHttpServerEntity(conf.HTTPAddress, port)
 	return HTTPServer
 }
+
+func StartPFCPServer(srv pfcp_networking.PFCPEntity) {
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != nil {
+			logrus.WithError(err).Error("PFCP Server Shutdown")
+		}
+	}()
+}

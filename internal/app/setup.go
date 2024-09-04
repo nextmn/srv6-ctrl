@@ -6,7 +6,6 @@ package app
 
 import (
 	"context"
-	"os"
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 
@@ -32,7 +31,6 @@ func (s Setup) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		s.HTTPServer.Stop()
 		s.PFCPServer.Close()
-		os.Exit(0) // currently, we will force exit instead
 		return nil
 	}
 }
