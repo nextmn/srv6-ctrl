@@ -319,7 +319,11 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				logrus.WithError(err).Debug("skip: error getting far")
 				continue
 			}
-			ForwardingParametersIe := far.ForwardingParameters()
+			ForwardingParametersIe, err := far.ForwardingParameters()
+			if err != nil {
+				// no forwarding prameters (maybe because hasn't FORW ?)
+				continue
+			}
 			if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
 				// FIXME: temporary hack, no IPv6 support
 				gnb_ipv4 := ohc.IPv4Address.String()
