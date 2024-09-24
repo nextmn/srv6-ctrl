@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/nextmn/go-pfcp-networking v0.0.36
-	github.com/nextmn/json-api v0.0.6
+	github.com/nextmn/json-api v0.0.7
 	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli/v2 v2.27.4
 	github.com/wmnsk/go-pfcp v0.0.24

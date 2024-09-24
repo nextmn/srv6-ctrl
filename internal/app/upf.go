@@ -60,7 +60,7 @@ func waitUntilReady(name string, uri string) {
 	}
 }
 
-func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
+func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink uint32) {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
 	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
 	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
@@ -68,6 +68,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		"ue-ip":         ue_ip,
 		"gnb-ip":        gnb_ip,
 		"teid-downlink": teid_downlink,
+		"teid-uplink":   teid_uplink,
 	}).Info("Pushing Router Rule")
 
 	// FIXME: Temporary hack: wait for routers to be ready
@@ -157,6 +158,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		Match: jsonapi.Match{
 			UEIpPrefix:  prefix_ue,
 			GNBIpPrefix: prefix_gnb, // TODO
+			Teid:        teid_uplink,
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink1,
@@ -173,6 +175,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 		Match: jsonapi.Match{
 			UEIpPrefix:  prefix_ue,
 			GNBIpPrefix: prefix_gnb, // TODO
+			Teid:        teid_uplink,
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink2,
@@ -279,9 +282,16 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32) {
 	//}
 }
 
+type ueInfos struct {
+	UplinkTeid   uint32
+	DownlinkTeid uint32
+	Gnb          string
+}
+
 func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
 	e.LogPFCPRules()
+	ues := make(map[string]*ueInfos)
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
 		session.RLock()
@@ -297,14 +307,6 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 				logrus.WithError(err).Debug("skip: error getting FARid")
 				continue
 			}
-			if source_iface, err := pdr.SourceInterface(); (err != nil) || ((source_iface != ie.SrcInterfaceSGiLANN6LAN) && (source_iface != ie.SrcInterfaceCore)) {
-				if err == nil {
-					logrus.WithFields(logrus.Fields{"source-iface": source_iface}).Debug("skip: wrong source-iface")
-				} else {
-					logrus.WithError(err).Debug("skip: error getting source-iface")
-				}
-				continue
-			}
 			ue_ip_addr, err := pdr.UEIPAddress()
 			if err != nil {
 				logrus.WithError(err).Debug("skip: error getting ueipaddr")
@@ -313,32 +315,71 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 
 			// FIXME: temporary hack, no IPv6 support
 			ue_ipv4 := ue_ip_addr.IPv4Address.String()
+			if source_iface, err := pdr.SourceInterface(); err != nil {
+				logrus.WithError(err).Debug("skip: error getting source-iface")
+				continue
+			} else if source_iface == ie.SrcInterfaceAccess {
+				fteid, err := pdr.FTEID()
+				if err != nil {
+					logrus.WithError(err).Debug("skip: no fteid")
+					continue
+				}
+				if ue, ok := ues[ue_ipv4]; !ok {
+					ues[ue_ipv4] = &ueInfos{
+						UplinkTeid: fteid.TEID,
+						Gnb:        fteid.IPv4Address.String(),
+					}
+				} else {
+					ue.Gnb = fteid.IPv4Address.String()
+					ue.UplinkTeid = fteid.TEID
+				}
 
-			far, err := session.GetFAR(farid)
-			if err != nil {
-				logrus.WithError(err).Debug("skip: error getting far")
-				continue
-			}
-			ForwardingParametersIe, err := far.ForwardingParameters()
-			if err != nil {
-				// no forwarding prameters (maybe because hasn't FORW ?)
-				continue
-			}
-			if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
-				// FIXME: temporary hack, no IPv6 support
-				gnb_ipv4 := ohc.IPv4Address.String()
-				teid_downlink := ohc.TEID
-				logrus.WithFields(logrus.Fields{
-					"ue-ipv4":       ue_ipv4,
-					"gnb-ipv4":      gnb_ipv4,
-					"teid-downlink": teid_downlink,
-				}).Debug("PushRTRRule")
-				go pushRTRRule(ue_ipv4, gnb_ipv4, teid_downlink)
+			} else if (source_iface == ie.SrcInterfaceCore) || (source_iface == ie.SrcInterfaceSGiLANN6LAN) {
+				far, err := session.GetFAR(farid)
+				if err != nil {
+					logrus.WithError(err).Debug("skip: error getting far")
+					continue
+				}
+				ForwardingParametersIe, err := far.ForwardingParameters()
+				if err != nil {
+					// no forwarding prameters (maybe because hasn't FORW ?)
+					continue
+				}
+				if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
+					// FIXME: temporary hack, no IPv6 support
+					gnb_ipv4 := ohc.IPv4Address.String()
+					teid_downlink := ohc.TEID
+					if ue, ok := ues[ue_ipv4]; !ok {
+						ues[ue_ipv4] = &ueInfos{
+							DownlinkTeid: teid_downlink,
+							Gnb:          gnb_ipv4,
+						}
+					} else {
+						ue.Gnb = gnb_ipv4
+						ue.DownlinkTeid = teid_downlink
+					}
+
+				} else {
+					logrus.WithError(err).Debug("skip: error getting ohc")
+					continue
+				}
 			} else {
-				logrus.WithError(err).Debug("skip: error getting ohc")
 				continue
 			}
 		}
+	}
+	for ip, ue := range ues {
+		if ue.DownlinkTeid == 0 {
+			// no set yet => session will be modified
+			continue
+		}
+		logrus.WithFields(logrus.Fields{
+			"ue-ipv4":       ip,
+			"gnb-ipv4":      ue.Gnb,
+			"teid-downlink": ue.DownlinkTeid,
+			"teid-uplink":   ue.UplinkTeid,
+		}).Debug("PushRTRRule")
+		go pushRTRRule(ip, ue.Gnb, ue.DownlinkTeid, ue.UplinkTeid)
 	}
 	logrus.Debug("Exit updateRoutersRules")
 }
