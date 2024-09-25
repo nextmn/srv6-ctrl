@@ -1,6 +1,6 @@
 module github.com/nextmn/srv6-ctrl
 
-go 1.22.1
+go 1.22.7
 
 require (
 	github.com/adrg/xdg v0.5.0
@@ -8,6 +8,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/nextmn/go-pfcp-networking v0.0.36
 	github.com/nextmn/json-api v0.0.7
+	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli/v2 v2.27.4
 	github.com/wmnsk/go-pfcp v0.0.24
