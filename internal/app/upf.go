@@ -139,7 +139,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		Enabled: true,
 		Type:    "downlink",
 		Match: jsonapi.Match{
-			Payload: jsonapi.Payload{
+			Payload: &jsonapi.Payload{
 				Dst: ue_addr,
 			},
 		},
@@ -153,12 +153,12 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		Enabled: true,
 		Type:    "uplink",
 		Match: jsonapi.Match{
-			Header: jsonapi.GtpHeader{
+			Header: &jsonapi.GtpHeader{
 				OuterIpSrc: gnb_addr, // TODO
 				Teid:       teid_uplink,
-				InnerIpSrc: ue_addr,
+				InnerIpSrc: &ue_addr,
 			},
-			Payload: jsonapi.Payload{
+			Payload: &jsonapi.Payload{
 				Dst: service_addr,
 			},
 		},
@@ -175,12 +175,12 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		Enabled: false,
 		Type:    "uplink",
 		Match: jsonapi.Match{
-			Header: jsonapi.GtpHeader{
+			Header: &jsonapi.GtpHeader{
 				OuterIpSrc: gnb_addr, // TODO
 				Teid:       teid_uplink,
-				InnerIpSrc: ue_addr,
+				InnerIpSrc: &ue_addr,
 			},
-			Payload: jsonapi.Payload{
+			Payload: &jsonapi.Payload{
 				Dst: service_addr,
 			},
 		},
