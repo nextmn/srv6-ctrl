@@ -76,16 +76,9 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	waitUntilReady("r0", edgertr0)
 	waitUntilReady("r1", edgertr1)
 
-	prefix_ue, err := netip.MustParseAddr(ue_ip).Prefix(32) // FIXME: don't trust input => ParseAddr
-	if err != nil {
-		logrus.WithFields(logrus.Fields{"ue-ip": ue_ip}).WithError(err).Error("Wrong prefix for UE")
-		return
-	}
-	prefix_gnb, err := netip.MustParseAddr(gnb_ip).Prefix(32) // FIXME: don't trust user input => ParseAddr
-	if err != nil {
-		logrus.WithFields(logrus.Fields{"gnb-ip": gnb_ip}).WithError(err).Error("Wrong prefix for Gnb")
-		return
-	}
+	ue_addr := netip.MustParseAddr(ue_ip)           // FIXME: don't trust input => ParseAddr
+	gnb_addr := netip.MustParseAddr(gnb_ip)         // FIXME: don't trust user input => ParseAddr
+	service_addr := netip.MustParseAddr("10.4.0.1") // FIXME: don't trust user input => ParseAddr
 
 	// FIXME: don't hardcode!
 	srh_downlink := ""
@@ -145,7 +138,11 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	data_edge := jsonapi.Rule{
 		Enabled: true,
 		Type:    "downlink",
-		Match:   jsonapi.Match{UEIpPrefix: prefix_ue},
+		Match: jsonapi.Match{
+			Payload: jsonapi.Payload{
+				Dst: ue_addr,
+			},
+		},
 		Action: jsonapi.Action{
 			NextHop: *nh_downlink,
 			SRH:     *srh_downlink_json,
@@ -156,9 +153,14 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		Enabled: true,
 		Type:    "uplink",
 		Match: jsonapi.Match{
-			UEIpPrefix:  prefix_ue,
-			GNBIpPrefix: prefix_gnb, // TODO
-			Teid:        teid_uplink,
+			Header: jsonapi.GtpHeader{
+				OuterIpSrc: gnb_addr, // TODO
+				Teid:       teid_uplink,
+				InnerIpSrc: ue_addr,
+			},
+			Payload: jsonapi.Payload{
+				Dst: service_addr,
+			},
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink1,
@@ -173,9 +175,14 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		Enabled: false,
 		Type:    "uplink",
 		Match: jsonapi.Match{
-			UEIpPrefix:  prefix_ue,
-			GNBIpPrefix: prefix_gnb, // TODO
-			Teid:        teid_uplink,
+			Header: jsonapi.GtpHeader{
+				OuterIpSrc: gnb_addr, // TODO
+				Teid:       teid_uplink,
+				InnerIpSrc: ue_addr,
+			},
+			Payload: jsonapi.Payload{
+				Dst: service_addr,
+			},
 		},
 		Action: jsonapi.Action{
 			NextHop: *nh_uplink2,
