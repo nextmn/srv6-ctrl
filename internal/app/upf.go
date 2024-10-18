@@ -334,10 +334,8 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 				if ue, ok := ues[ue_ipv4]; !ok {
 					ues[ue_ipv4] = &ueInfos{
 						UplinkTeid: fteid.TEID,
-						Gnb:        fteid.IPv4Address.String(),
 					}
 				} else {
-					ue.Gnb = fteid.IPv4Address.String()
 					ue.UplinkTeid = fteid.TEID
 				}
 
