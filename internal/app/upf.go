@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/nextmn/srv6-ctrl/internal/config"
@@ -295,9 +296,8 @@ type ueInfos struct {
 	Gnb          string
 }
 
-func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
+func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
-	e.LogPFCPRules()
 	ues := make(map[string]*ueInfos)
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
@@ -375,6 +375,7 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 			}
 		}
 	}
+	var wg sync.WaitGroup
 	for ip, ue := range ues {
 		if ue.DownlinkTeid == 0 {
 			// no set yet => session will be modified
@@ -386,7 +387,11 @@ func updateRoutersRules(msgType pfcputil.MessageType, message pfcp_networking.Re
 			"teid-downlink": ue.DownlinkTeid,
 			"teid-uplink":   ue.UplinkTeid,
 		}).Debug("PushRTRRule")
-		go pushRTRRule(ip, ue.Gnb, ue.DownlinkTeid, ue.UplinkTeid)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pushRTRRule(ip, ue.Gnb, ue.DownlinkTeid, ue.UplinkTeid)
+		}()
 	}
 	logrus.Debug("Exit updateRoutersRules")
 }
@@ -397,14 +402,20 @@ func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
 func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP) error {
 	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(ctx, msg)
-		go updateRoutersRules(message.MsgTypeSessionEstablishmentRequest, msg, s)
+		if err == nil {
+			go s.LogPFCPRules()
+			updateRoutersRules(ctx, message.MsgTypeSessionEstablishmentRequest, msg, s)
+		}
 		return out, err
 	}); err != nil {
 		return err
 	}
 	if err := s.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionModificationRequestHandler(ctx, msg)
-		go updateRoutersRules(message.MsgTypeSessionModificationRequest, msg, s)
+		if err == nil {
+			go s.LogPFCPRules()
+			updateRoutersRules(ctx, message.MsgTypeSessionModificationRequest, msg, s)
+		}
 		return out, err
 	}); err != nil {
 		return err
