@@ -395,7 +395,7 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 }
 
 func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
-	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress, conf.PFCPAddress)
+	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress.String(), conf.PFCPAddress.String())
 }
 func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP) error {
 	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
@@ -426,7 +426,7 @@ func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
 	if conf.HTTPPort != nil {
 		port = *conf.HTTPPort
 	}
-	HTTPServer := NewHttpServerEntity(conf.HTTPAddress, port)
+	HTTPServer := NewHttpServerEntity(conf.HTTPAddress.String(), port)
 	return HTTPServer
 }
 

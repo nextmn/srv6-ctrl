@@ -6,6 +6,7 @@ package config
 
 import (
 	"io/ioutil"
+	"net/netip"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
@@ -28,8 +29,8 @@ func ParseConf(file string) (*CtrlConfig, error) {
 }
 
 type CtrlConfig struct {
-	PFCPAddress string  `yaml:"pfcp-address"`
-	HTTPAddress string  `yaml:"http-address"`
-	HTTPPort    *string `yaml:"http-port,omitempty"` // default: 80
-	Logger      *Logger `yaml:"logger,omitempty"`
+	PFCPAddress netip.Addr `yaml:"pfcp-address"`
+	HTTPAddress netip.Addr `yaml:"http-address"`
+	HTTPPort    *string    `yaml:"http-port,omitempty"` // default: 80
+	Logger      *Logger    `yaml:"logger,omitempty"`
 }
