@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/netip"
 	"sync"
-	"time"
 
 	"github.com/nextmn/srv6-ctrl/internal/config"
 
@@ -27,41 +26,7 @@ import (
 
 const UserAgent = "go-github-nextmn-srv6-ctrl"
 
-func isReady(name string, uri string) bool {
-	client := http.Client{}
-	req, err := http.NewRequest(http.MethodGet, uri+"/status", nil)
-	if err != nil {
-		logrus.WithError(err).Error("Error while creating http get request")
-		return false
-	}
-	req.Header.Add("User-Agent", UserAgent)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Charset", "utf-8")
-	resp, err := client.Do(req)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{"remote-server": name}).WithError(err).Info("Remote server is not ready: waiting…")
-		time.Sleep(500 * time.Millisecond)
-		return false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		logrus.WithFields(logrus.Fields{"remote-server": name}).WithError(err).Info("Remote server is not ready: waiting…")
-		time.Sleep(500 * time.Millisecond)
-		return false
-	} else {
-		return true
-	}
-}
-
-func waitUntilReady(name string, uri string) {
-	for {
-		if ok := isReady(name, uri); ok {
-			return
-		}
-	}
-}
-
-func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink uint32) {
+func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink uint32) error {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
 	edgertr0 := "http://[fd00:0:0:0:2:8000:0:4]:8080" //FIXME: dont use hardcoded value
 	edgertr1 := "http://[fd00:0:0:0:2:8000:0:5]:8080" //FIXME: dont use hardcoded value
@@ -71,11 +36,6 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		"teid-downlink": teid_downlink,
 		"teid-uplink":   teid_uplink,
 	}).Info("Pushing Router Rule")
-
-	// FIXME: Temporary hack: wait for routers to be ready
-	waitUntilReady("srgw0", srgw_uri)
-	waitUntilReady("r0", edgertr0)
-	waitUntilReady("r1", edgertr1)
 
 	ue_addr := netip.MustParseAddr(ue_ip)           // FIXME: don't trust input => ParseAddr
 	gnb_addr := netip.MustParseAddr(gnb_ip)         // FIXME: don't trust user input => ParseAddr
@@ -91,7 +51,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 			"hardcoded-teid-downlink": 1,
 			"actual-teid-downlink":    teid_downlink,
 		}).Error("downlink TEID different than hardcoded one! It's time to write more code :(")
-		return
+		return fmt.Errorf("Not implemented with this teid")
 	}
 	switch gnb_ip {
 	case "10.1.4.129": // gnb1
@@ -103,37 +63,38 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 		break
 	default:
 		logrus.WithFields(logrus.Fields{"gnb-ip": gnb_ip}).Error("Wrong gnb ip")
+		return fmt.Errorf("Not implemented with this gnb ip")
 	}
 	nh_downlink, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		logrus.WithError(err).Error("Creation of NextHop downlink failed")
-		return
+		return err
 	}
 
 	nh_uplink1, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		logrus.WithError(err).Error("Creation of NextHop uplink 1 failed")
-		return
+		return err
 	}
 	nh_uplink2, err := jsonapi.NewNextHop(rr)
 	if err != nil {
 		logrus.WithError(err).Error("Creation of NextHop uplink 2 failed")
-		return
+		return err
 	}
 	srh_downlink_json, err := jsonapi.NewSRH([]string{srh_downlink})
 	if err != nil {
 		logrus.WithError(err).Error("Creation of SRH downlink failed")
-		return
+		return err
 	}
 	srh_uplink1_json, err := jsonapi.NewSRH([]string{srh_uplink_1})
 	if err != nil {
 		logrus.WithError(err).Error("Creation of SRH uplink 1 failed")
-		return
+		return err
 	}
 	srh_uplink2_json, err := jsonapi.NewSRH([]string{srh_uplink_2})
 	if err != nil {
 		logrus.WithError(err).Error("Creation of SRH uplink 2 failed")
-		return
+		return err
 	}
 
 	data_edge := jsonapi.Rule{
@@ -171,6 +132,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	json_data_gw1, err := json.Marshal(data_gw1)
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	data_gw2 := jsonapi.Rule{
 		Enabled: false,
@@ -193,10 +155,12 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	json_data_gw2, err := json.Marshal(data_gw2)
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	json_data_edge, err := json.Marshal(data_edge)
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 
 	//FIXME: dont send to every node, only to relevant ones
@@ -206,18 +170,22 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	req, err := http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw1))
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
+		return fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
 		fmt.Printf("HTTP Bad Request\n")
+		return fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
 		fmt.Printf("Router server error: internal error\n")
+		return fmt.Errorf("HTTP internal error")
 	}
 	//else if resp.StatusCode == 201{
 	//OK: store resource
@@ -228,18 +196,22 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	req, err = http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw2))
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
+		return fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
 		fmt.Printf("HTTP Bad Request\n")
+		return fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
 		fmt.Printf("Router server error: internal error\n")
+		return fmt.Errorf("HTTP internal error")
 	}
 	//else if resp.StatusCode == 201{
 	//OK: store resource
@@ -250,18 +222,22 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	req, err = http.NewRequest(http.MethodPost, edgertr0+"/rules", bytes.NewBuffer(json_data_edge))
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
+		return fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
 		fmt.Printf("HTTP Bad Request\n")
+		return fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
 		fmt.Printf("Router server error: internal error\n")
+		return fmt.Errorf("HTTP internal error")
 	}
 	//else if resp.StatusCode == 201{
 	//OK: store resource
@@ -271,23 +247,28 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	req, err = http.NewRequest(http.MethodPost, edgertr1+"/rules", bytes.NewBuffer(json_data_edge))
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
+		return fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
 		fmt.Printf("HTTP Bad Request\n")
+		return fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
 		fmt.Printf("Router server error: internal error\n")
+		return fmt.Errorf("HTTP internal error")
 	}
 	//else if resp.StatusCode == 201{
 	//OK: store resource
 	//_ := resp.Header.Get("Location")
 	//}
+	return nil
 }
 
 type ueInfos struct {
@@ -389,6 +370,7 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 		go func() {
 			defer wg.Done()
 			pushRTRRule(ip, ue.Gnb, ue.DownlinkTeid, ue.UplinkTeid)
+			// TODO: check pushRTRRule return code and send pfcp error on failure
 		}()
 	}
 	logrus.Debug("Exit updateRoutersRules")
