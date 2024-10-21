@@ -30,22 +30,22 @@ const UserAgent = "go-github-nextmn-srv6-ctrl"
 func pushSingleRule(client http.Client, uri string, data []byte) error {
 	req, err := http.NewRequest(http.MethodPost, uri+"/rules", bytes.NewBuffer(data))
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Error("could not create http request")
 		return err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Error("Could not push rules: server not responding")
 		return fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
-		fmt.Printf("HTTP Bad Request\n")
+		logrus.WithError(err).Error("HTTP Bad Request")
 		return fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
-		fmt.Printf("Router server error: internal error\n")
+		logrus.WithError(err).Error("HTTP internal error")
 		return fmt.Errorf("HTTP internal error")
 	}
 	//else if resp.StatusCode == 201{
@@ -160,7 +160,7 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	}
 	json_data_gw1, err := json.Marshal(data_gw1)
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Error("Could not marshal json")
 		return err
 	}
 	data_gw2 := jsonapi.Rule{
@@ -183,12 +183,12 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 	}
 	json_data_gw2, err := json.Marshal(data_gw2)
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Error("Could not marshal json")
 		return err
 	}
 	json_data_edge, err := json.Marshal(data_edge)
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Error("Could not marshal json")
 		return err
 	}
 
@@ -263,7 +263,16 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 					if ue, loaded := ues.LoadOrStore(ue_ipv4, &ueInfos{
 						UplinkTeid: fteid.TEID,
 					}); loaded {
+						logrus.WithFields(logrus.Fields{
+							"teid-uplink": fteid.TEID,
+							"ue-ipv4":     ue_ipv4,
+						}).Debug("Updating UeInfos")
 						ue.(*ueInfos).UplinkTeid = fteid.TEID
+					} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
+						logrus.WithFields(logrus.Fields{
+							"teid-uplink": fteid.TEID,
+							"ue-ipv4":     ue_ipv4,
+						}).Debug("Adding new ue to UeInfos")
 					}
 
 				} else if (source_iface == ie.SrcInterfaceCore) || (source_iface == ie.SrcInterfaceSGiLANN6LAN) {
@@ -285,8 +294,19 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 							DownlinkTeid: teid_downlink,
 							Gnb:          gnb_ipv4,
 						}); loaded {
+							logrus.WithFields(logrus.Fields{
+								"gnb-ipv4":      gnb_ipv4,
+								"teid-downlink": teid_downlink,
+								"ue-ipv4":       ue_ipv4,
+							}).Debug("Updating UeInfos")
 							ue.(*ueInfos).Gnb = gnb_ipv4
 							ue.(*ueInfos).DownlinkTeid = teid_downlink
+						} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
+							logrus.WithFields(logrus.Fields{
+								"gnb-ipv4":      gnb_ipv4,
+								"teid-downlink": teid_downlink,
+								"ue-ipv4":       ue_ipv4,
+							}).Debug("Adding new ue to UeInfos")
 						}
 
 					} else {
