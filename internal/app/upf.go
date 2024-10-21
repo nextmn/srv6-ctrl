@@ -232,9 +232,12 @@ type ueInfos struct {
 func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
 	ues := sync.Map{}
+	var wg0 sync.WaitGroup
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
+		wg0.Add(1)
 		go func() error {
+			defer wg0.Done()
 			session.RLock()
 			defer session.RUnlock()
 			session.ForeachUnsortedPDR(func(pdr pfcpapi.PDRInterface) error {
@@ -321,10 +324,14 @@ func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, messa
 			return nil
 		}()
 	}
+	wg0.Wait()
 	var wg sync.WaitGroup
 	ues.Range(func(ip any, ue any) bool {
 		if ue.(*ueInfos).DownlinkTeid == 0 {
 			// no set yet => session will be modified
+			logrus.WithFields(logrus.Fields{
+				"ue-ipv4": ip,
+			}).Debug("Downlink TEID is null")
 			return true
 		}
 		logrus.WithFields(logrus.Fields{
