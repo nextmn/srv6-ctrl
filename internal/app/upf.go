@@ -16,6 +16,7 @@ import (
 	"github.com/nextmn/srv6-ctrl/internal/config"
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
+	pfcpapi "github.com/nextmn/go-pfcp-networking/pfcp/api"
 	"github.com/nextmn/go-pfcp-networking/pfcputil"
 	"github.com/nextmn/json-api/jsonapi"
 
@@ -25,6 +26,34 @@ import (
 )
 
 const UserAgent = "go-github-nextmn-srv6-ctrl"
+
+func pushSingleRule(client http.Client, uri string, data []byte) error {
+	req, err := http.NewRequest(http.MethodPost, uri+"/rules", bytes.NewBuffer(data))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	req.Header.Add("User-Agent", UserAgent)
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return fmt.Errorf("Could not push rules: server not responding")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 400 {
+		fmt.Printf("HTTP Bad Request\n")
+		return fmt.Errorf("HTTP Bad request")
+	} else if resp.StatusCode >= 500 {
+		fmt.Printf("Router server error: internal error\n")
+		return fmt.Errorf("HTTP internal error")
+	}
+	//else if resp.StatusCode == 201{
+	//OK: store resource
+	//_ := resp.Header.Get("Location")
+	//}
+	return nil
+}
 
 func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink uint32) error {
 	srgw_uri := "http://[fd00:0:0:0:2:8000:0:2]:8080" //FIXME: dont use hardcoded value
@@ -165,109 +194,32 @@ func pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink 
 
 	//FIXME: dont send to every node, only to relevant ones
 	client := http.Client{}
+	var wg sync.WaitGroup
 
-	// TODO: retry on timeout failure
-	req, err := http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw1))
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	req.Header.Add("User-Agent", UserAgent)
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Could not push rules: server not responding")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 400 {
-		fmt.Printf("HTTP Bad Request\n")
-		return fmt.Errorf("HTTP Bad request")
-	} else if resp.StatusCode >= 500 {
-		fmt.Printf("Router server error: internal error\n")
-		return fmt.Errorf("HTTP internal error")
-	}
-	//else if resp.StatusCode == 201{
-	//OK: store resource
-	//_ := resp.Header.Get("Location")
-	//}
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		return pushSingleRule(client, srgw_uri, json_data_gw1)
+	}()
 
-	// TODO: retry on timeout failure
-	req, err = http.NewRequest(http.MethodPost, srgw_uri+"/rules", bytes.NewBuffer(json_data_gw2))
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	req.Header.Add("User-Agent", UserAgent)
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err = client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Could not push rules: server not responding")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 400 {
-		fmt.Printf("HTTP Bad Request\n")
-		return fmt.Errorf("HTTP Bad request")
-	} else if resp.StatusCode >= 500 {
-		fmt.Printf("Router server error: internal error\n")
-		return fmt.Errorf("HTTP internal error")
-	}
-	//else if resp.StatusCode == 201{
-	//OK: store resource
-	//_ := resp.Header.Get("Location")
-	//}
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		return pushSingleRule(client, srgw_uri, json_data_gw2)
+	}()
 
-	// TODO: retry on timeout failure
-	req, err = http.NewRequest(http.MethodPost, edgertr0+"/rules", bytes.NewBuffer(json_data_edge))
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	req.Header.Add("User-Agent", UserAgent)
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err = client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Could not push rules: server not responding")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 400 {
-		fmt.Printf("HTTP Bad Request\n")
-		return fmt.Errorf("HTTP Bad request")
-	} else if resp.StatusCode >= 500 {
-		fmt.Printf("Router server error: internal error\n")
-		return fmt.Errorf("HTTP internal error")
-	}
-	//else if resp.StatusCode == 201{
-	//OK: store resource
-	//_ := resp.Header.Get("Location")
-	//}
-	// TODO: retry on timeout failure
-	req, err = http.NewRequest(http.MethodPost, edgertr1+"/rules", bytes.NewBuffer(json_data_edge))
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	req.Header.Add("User-Agent", UserAgent)
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err = client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Could not push rules: server not responding")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 400 {
-		fmt.Printf("HTTP Bad Request\n")
-		return fmt.Errorf("HTTP Bad request")
-	} else if resp.StatusCode >= 500 {
-		fmt.Printf("Router server error: internal error\n")
-		return fmt.Errorf("HTTP internal error")
-	}
-	//else if resp.StatusCode == 201{
-	//OK: store resource
-	//_ := resp.Header.Get("Location")
-	//}
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		return pushSingleRule(client, edgertr0, json_data_edge)
+	}()
+
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		return pushSingleRule(client, edgertr1, json_data_edge)
+	}()
+	wg.Wait()
 	return nil
 }
 
@@ -279,100 +231,97 @@ type ueInfos struct {
 
 func updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
-	ues := make(map[string]*ueInfos)
+	ues := sync.Map{}
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
-		session.RLock()
-		defer session.RUnlock()
-		for _, pdrid := range session.GetSortedPDRIDs() {
-			pdr, err := session.GetPDR(pdrid)
-			if err != nil {
-				logrus.WithError(err).Debug("skip: error getting PDR")
-				continue
-			}
-			farid, err := pdr.FARID()
-			if err != nil {
-				logrus.WithError(err).Debug("skip: error getting FARid")
-				continue
-			}
-			ue_ip_addr, err := pdr.UEIPAddress()
-			if err != nil {
-				logrus.WithError(err).Debug("skip: error getting ueipaddr")
-				continue
-			}
-
-			// FIXME: temporary hack, no IPv6 support
-			ue_ipv4 := ue_ip_addr.IPv4Address.String()
-			if source_iface, err := pdr.SourceInterface(); err != nil {
-				logrus.WithError(err).Debug("skip: error getting source-iface")
-				continue
-			} else if source_iface == ie.SrcInterfaceAccess {
-				fteid, err := pdr.FTEID()
+		go func() error {
+			session.RLock()
+			defer session.RUnlock()
+			session.ForeachUnsortedPDR(func(pdr pfcpapi.PDRInterface) error {
+				farid, err := pdr.FARID()
 				if err != nil {
-					logrus.WithError(err).Debug("skip: no fteid")
-					continue
+					logrus.WithError(err).Debug("skip: error getting FARid")
+					return nil
 				}
-				if ue, ok := ues[ue_ipv4]; !ok {
-					ues[ue_ipv4] = &ueInfos{
-						UplinkTeid: fteid.TEID,
+				ue_ip_addr, err := pdr.UEIPAddress()
+				if err != nil {
+					logrus.WithError(err).Debug("skip: error getting ueipaddr")
+					return nil
+				}
+
+				// FIXME: temporary hack, no IPv6 support
+				ue_ipv4 := ue_ip_addr.IPv4Address.String()
+				if source_iface, err := pdr.SourceInterface(); err != nil {
+					logrus.WithError(err).Debug("skip: error getting source-iface")
+					return nil
+				} else if source_iface == ie.SrcInterfaceAccess {
+					fteid, err := pdr.FTEID()
+					if err != nil {
+						logrus.WithError(err).Debug("skip: no fteid")
+						return nil
 					}
-				} else {
-					ue.UplinkTeid = fteid.TEID
-				}
+					if ue, loaded := ues.LoadOrStore(ue_ipv4, &ueInfos{
+						UplinkTeid: fteid.TEID,
+					}); loaded {
+						ue.(*ueInfos).UplinkTeid = fteid.TEID
+					}
 
-			} else if (source_iface == ie.SrcInterfaceCore) || (source_iface == ie.SrcInterfaceSGiLANN6LAN) {
-				far, err := session.GetFAR(farid)
-				if err != nil {
-					logrus.WithError(err).Debug("skip: error getting far")
-					continue
-				}
-				ForwardingParametersIe, err := far.ForwardingParameters()
-				if err != nil {
-					// no forwarding prameters (maybe because hasn't FORW ?)
-					continue
-				}
-				if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
-					// FIXME: temporary hack, no IPv6 support
-					gnb_ipv4 := ohc.IPv4Address.String()
-					teid_downlink := ohc.TEID
-					if ue, ok := ues[ue_ipv4]; !ok {
-						ues[ue_ipv4] = &ueInfos{
+				} else if (source_iface == ie.SrcInterfaceCore) || (source_iface == ie.SrcInterfaceSGiLANN6LAN) {
+					far, err := session.GetFAR(farid)
+					if err != nil {
+						logrus.WithError(err).Debug("skip: error getting far")
+						return nil
+					}
+					ForwardingParametersIe, err := far.ForwardingParameters()
+					if err != nil {
+						// no forwarding prameters (maybe because hasn't FORW ?)
+						return nil
+					}
+					if ohc, err := ForwardingParametersIe.OuterHeaderCreation(); err == nil {
+						// FIXME: temporary hack, no IPv6 support
+						gnb_ipv4 := ohc.IPv4Address.String()
+						teid_downlink := ohc.TEID
+						if ue, loaded := ues.LoadOrStore(ue_ipv4, &ueInfos{
 							DownlinkTeid: teid_downlink,
 							Gnb:          gnb_ipv4,
+						}); loaded {
+							ue.(*ueInfos).Gnb = gnb_ipv4
+							ue.(*ueInfos).DownlinkTeid = teid_downlink
 						}
-					} else {
-						ue.Gnb = gnb_ipv4
-						ue.DownlinkTeid = teid_downlink
-					}
 
+					} else {
+						logrus.WithError(err).Debug("skip: error getting ohc")
+						return nil
+					}
 				} else {
-					logrus.WithError(err).Debug("skip: error getting ohc")
-					continue
+					return nil
 				}
-			} else {
-				continue
-			}
-		}
+				return nil
+			})
+			return nil
+		}()
 	}
 	var wg sync.WaitGroup
-	for ip, ue := range ues {
-		if ue.DownlinkTeid == 0 {
+	ues.Range(func(ip any, ue any) bool {
+		if ue.(*ueInfos).DownlinkTeid == 0 {
 			// no set yet => session will be modified
-			continue
+			return true
 		}
 		logrus.WithFields(logrus.Fields{
 			"ue-ipv4":       ip,
-			"gnb-ipv4":      ue.Gnb,
-			"teid-downlink": ue.DownlinkTeid,
-			"teid-uplink":   ue.UplinkTeid,
+			"gnb-ipv4":      ue.(*ueInfos).Gnb,
+			"teid-downlink": ue.(*ueInfos).DownlinkTeid,
+			"teid-uplink":   ue.(*ueInfos).UplinkTeid,
 		}).Debug("PushRTRRule")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pushRTRRule(ip, ue.Gnb, ue.DownlinkTeid, ue.UplinkTeid)
+			pushRTRRule(ip.(string), ue.(*ueInfos).Gnb, ue.(*ueInfos).DownlinkTeid, ue.(*ueInfos).UplinkTeid)
 			// TODO: check pushRTRRule return code and send pfcp error on failure
 		}()
-	}
+		return true
+	})
+	wg.Wait()
 	logrus.Debug("Exit updateRoutersRules")
 }
 
