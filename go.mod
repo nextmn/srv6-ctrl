@@ -6,7 +6,7 @@ require (
 	github.com/adrg/xdg v0.5.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/nextmn/go-pfcp-networking v0.0.37
+	github.com/nextmn/go-pfcp-networking v0.0.38-0.20241022185636-2bc53f00009e
 	github.com/nextmn/json-api v0.0.10
 	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/sirupsen/logrus v1.9.3
@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/bytedance/sonic v1.12.3 // indirect
-	github.com/bytedance/sonic/loader v0.2.0 // indirect
+	github.com/bytedance/sonic/loader v0.2.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
