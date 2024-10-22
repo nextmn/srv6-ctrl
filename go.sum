@@ -3,8 +3,6 @@ github.com/adrg/xdg v0.5.1/go.mod h1:nlTsY+NNiCBGCK2tpm09vRqfVzrc2fLmXGpBLF0zlTQ
 github.com/bytedance/sonic v1.12.3 h1:W2MGa7RCU1QTeYRTPE3+88mVC0yXmsRQRChiyVocVjU=
 github.com/bytedance/sonic v1.12.3/go.mod h1:B8Gt/XvtZ3Fqj+iSKMypzymZxw/FVwgIGKzMzT9r/rk=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
-github.com/bytedance/sonic/loader v0.2.0 h1:zNprn+lsIP06C/IqCHs3gPQIvnvpKbbxyXQP1iU4kWM=
-github.com/bytedance/sonic/loader v0.2.0/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
 github.com/bytedance/sonic/loader v0.2.1 h1:1GgorWTqf12TA8mma4DDSbaQigE2wOgQo7iCjjJv3+E=
 github.com/bytedance/sonic/loader v0.2.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
 github.com/cloudwego/base64x v0.1.4 h1:jwCgWpFanWmN8xoIUHa2rtzmkd5J2plF/dnLS6Xd/0Y=
@@ -52,10 +50,8 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
-github.com/nextmn/go-pfcp-networking v0.0.37 h1:xo2RT8eXS0tbVVi2xsPfUOqahGzt2VGBB1baLf2KhxU=
-github.com/nextmn/go-pfcp-networking v0.0.37/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
-github.com/nextmn/go-pfcp-networking v0.0.38-0.20241022185636-2bc53f00009e h1:f96dlpsMIPLbb2O/frQOdNg6qSMCoHga1ivIjkgQ6hw=
-github.com/nextmn/go-pfcp-networking v0.0.38-0.20241022185636-2bc53f00009e/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
+github.com/nextmn/go-pfcp-networking v0.0.38 h1:C7HgLh6UUbqfoTHl/uvUcYNZUBPSur68rOHdLUnpx9Q=
+github.com/nextmn/go-pfcp-networking v0.0.38/go.mod h1:KYoKLiltDmHL2YMU5mz2k/E1xMoz4TpmzTz6Nr5u5gA=
 github.com/nextmn/json-api v0.0.10 h1:/7WCtGaLEKFKGstOrssac6QgPL0MeGqpkRWU3hepS1A=
 github.com/nextmn/json-api v0.0.10/go.mod h1:0py63IYCOBp1ZtLkMjNCNnOwbwhOmkh+ymJ0/OrxYx8=
 github.com/nextmn/logrus-formatter v0.0.1 h1:Bsf78jjiEESc+rV8xE6IyKj4frDPGMwXFNrLQzm6A1E=
