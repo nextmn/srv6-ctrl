@@ -3,3 +3,21 @@ http-address: "192.0.2.2"
 http-port: "8080"
 logger:
   level: info
+uplink:
+  - control-uri: "http://[fd00:0:0:0:2:8000:0:2]:8080"
+    enabled: true
+    segments-list:
+      - "fc00:2:1::"
+  - control-uri: "http://[fd00:0:0:0:2:8000:0:2]:8080"
+    enabled: false
+    segments-list:
+      - "fc00:3:1::"
+downlink:
+  - control-uri: "http://[fd00:0:0:0:2:8000:0:4]:8080"
+    enabled: true
+    segments-list:
+      - "fc00:1:1::/48"
+  - control-uri: "http://[fd00:0:0:0:2:8000:0:5]:8080"
+    enabled: true
+    segments-list:
+      - "fc00:1:1::/48"

@@ -13,19 +13,21 @@ import (
 )
 
 type Setup struct {
-	HTTPServer *HttpServerEntity
-	PFCPServer *pfcp_networking.PFCPEntityUP
+	HTTPServer  *HttpServerEntity
+	PFCPServer  *pfcp_networking.PFCPEntityUP
+	RulesPusher *RulesPusher
 }
 
 func NewSetup(conf *config.CtrlConfig) Setup {
 	return Setup{
-		HTTPServer: NewHttpServer(conf),
-		PFCPServer: NewPFCPNode(conf),
+		HTTPServer:  NewHttpServer(conf),
+		PFCPServer:  NewPFCPNode(conf),
+		RulesPusher: NewRulesPusher(conf),
 	}
 }
 
 func (s Setup) Run(ctx context.Context) error {
-	if err := PFCPServerAddHooks(s.PFCPServer); err != nil {
+	if err := PFCPServerAddHooks(s.PFCPServer, s.RulesPusher); err != nil {
 		return err
 	}
 	StartPFCPServer(ctx, s.PFCPServer)

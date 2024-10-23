@@ -33,4 +33,6 @@ type CtrlConfig struct {
 	HTTPAddress netip.Addr `yaml:"http-address"`
 	HTTPPort    *string    `yaml:"http-port,omitempty"` // default: 80
 	Logger      *Logger    `yaml:"logger,omitempty"`
+	Uplink      []Rule     `yaml:"uplink"`
+	Downlink    []Rule     `yaml:"downlink"`
 }
