@@ -29,12 +29,22 @@ const UserAgent = "go-github-nextmn-srv6-ctrl"
 type RulesPusher struct {
 	uplink   []config.Rule
 	downlink []config.Rule
+	ues      sync.Map
+}
+
+type ueInfos struct {
+	UplinkTeid   uint32
+	DownlinkTeid uint32
+	Gnb          string
+	Pushed       bool
+	sync.Mutex
 }
 
 func NewRulesPusher(config *config.CtrlConfig) *RulesPusher {
 	return &RulesPusher{
 		uplink:   config.Uplink,
 		downlink: config.Downlink,
+		ues:      sync.Map{},
 	}
 }
 
@@ -66,17 +76,28 @@ func (pusher *RulesPusher) pushSingleRule(client http.Client, uri string, data [
 	return nil
 }
 
-func (pusher *RulesPusher) pushRTRRule(ue_ip string, gnb_ip string, teid_downlink uint32, teid_uplink uint32) error {
+func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
+	i, ok := pusher.ues.Load(ue_ip)
+	infos := i.(*ueInfos)
+	infos.Lock()
+	defer infos.Unlock()
+	if infos.Pushed {
+		return nil // already pushed, nothing to do
+	}
+	infos.Pushed = true
+	if !ok {
+		return fmt.Errorf("UE not in ue list")
+	}
 	service_ip := "10.4.0.1"
 	logrus.WithFields(logrus.Fields{
 		"ue-ip":         ue_ip,
-		"gnb-ip":        gnb_ip,
-		"teid-downlink": teid_downlink,
-		"teid-uplink":   teid_uplink,
+		"gnb-ip":        infos.Gnb,
+		"teid-downlink": infos.DownlinkTeid,
+		"teid-uplink":   infos.UplinkTeid,
 		"service-ip":    service_ip,
 	}).Info("Pushing Router Rules")
 	ue_addr := netip.MustParseAddr(ue_ip)           // FIXME: don't trust user input => ParseAddr
-	gnb_addr := netip.MustParseAddr(gnb_ip)         // FIXME: don't trust user input => ParseAddr
+	gnb_addr := netip.MustParseAddr(infos.Gnb)      // FIXME: don't trust user input => ParseAddr
 	service_addr := netip.MustParseAddr(service_ip) // FIXME: don't trust user input => ParseAddr
 
 	client := http.Client{}
@@ -97,7 +118,7 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string, gnb_ip string, teid_downlin
 			Match: jsonapi.Match{
 				Header: &jsonapi.GtpHeader{
 					OuterIpSrc: gnb_addr,
-					Teid:       teid_uplink,
+					Teid:       infos.UplinkTeid,
 					InnerIpSrc: &ue_addr,
 				},
 				Payload: &jsonapi.Payload{
@@ -132,7 +153,7 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string, gnb_ip string, teid_downlin
 		if err != nil {
 			return err
 		}
-		dst := encoding.NewMGTP4IPv6Dst(prefix, gnb_addr.As4(), encoding.NewArgsMobSession(0, false, false, teid_downlink))
+		dst := encoding.NewMGTP4IPv6Dst(prefix, gnb_addr.As4(), encoding.NewArgsMobSession(0, false, false, infos.DownlinkTeid))
 		dstB, err := dst.Marshal()
 		if err != nil {
 			return err
@@ -178,15 +199,8 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string, gnb_ip string, teid_downlin
 	return nil
 }
 
-type ueInfos struct {
-	UplinkTeid   uint32
-	DownlinkTeid uint32
-	Gnb          string
-}
-
 func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
-	ues := sync.Map{}
 	var wg0 sync.WaitGroup
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Debug("In for loop…")
@@ -218,14 +232,17 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						logrus.WithError(err).Debug("skip: no fteid")
 						return nil
 					}
-					if ue, loaded := ues.LoadOrStore(ue_ipv4, &ueInfos{
+					if ue, loaded := pusher.ues.LoadOrStore(ue_ipv4, &ueInfos{
 						UplinkTeid: fteid.TEID,
 					}); loaded {
 						logrus.WithFields(logrus.Fields{
 							"teid-uplink": fteid.TEID,
 							"ue-ipv4":     ue_ipv4,
 						}).Debug("Updating UeInfos")
+
+						ue.(*ueInfos).Lock()
 						ue.(*ueInfos).UplinkTeid = fteid.TEID
+						ue.(*ueInfos).Unlock()
 					} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
 						logrus.WithFields(logrus.Fields{
 							"teid-uplink": fteid.TEID,
@@ -248,7 +265,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						// FIXME: temporary hack, no IPv6 support
 						gnb_ipv4 := ohc.IPv4Address.String()
 						teid_downlink := ohc.TEID
-						if ue, loaded := ues.LoadOrStore(ue_ipv4, &ueInfos{
+						if ue, loaded := pusher.ues.LoadOrStore(ue_ipv4, &ueInfos{
 							DownlinkTeid: teid_downlink,
 							Gnb:          gnb_ipv4,
 						}); loaded {
@@ -257,8 +274,10 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 								"teid-downlink": teid_downlink,
 								"ue-ipv4":       ue_ipv4,
 							}).Debug("Updating UeInfos")
+							ue.(*ueInfos).Lock()
 							ue.(*ueInfos).Gnb = gnb_ipv4
 							ue.(*ueInfos).DownlinkTeid = teid_downlink
+							ue.(*ueInfos).Unlock()
 						} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
 							logrus.WithFields(logrus.Fields{
 								"gnb-ipv4":      gnb_ipv4,
@@ -281,7 +300,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 	}
 	wg0.Wait()
 	var wg sync.WaitGroup
-	ues.Range(func(ip any, ue any) bool {
+	pusher.ues.Range(func(ip any, ue any) bool {
 		if ue.(*ueInfos).DownlinkTeid == 0 {
 			// no set yet => session will be modified
 			logrus.WithFields(logrus.Fields{
@@ -298,7 +317,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pusher.pushRTRRule(ip.(string), ue.(*ueInfos).Gnb, ue.(*ueInfos).DownlinkTeid, ue.(*ueInfos).UplinkTeid)
+			pusher.pushRTRRule(ip.(string))
 			// TODO: check pushRTRRule return code and send pfcp error on failure
 		}()
 		return true
