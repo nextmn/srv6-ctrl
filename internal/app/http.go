@@ -11,9 +11,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nextmn/json-api/healthcheck"
+	"github.com/nextmn/json-api/jsonapi"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
-	"github.com/nextmn/json-api/jsonapi"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,7 +29,7 @@ type RouterRegistry struct {
 	routers jsonapi.RouterMap
 }
 
-func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
+func NewHttpServerEntity(httpAddr string) *HttpServerEntity {
 	rr := RouterRegistry{
 		routers: make(jsonapi.RouterMap),
 	}
@@ -38,7 +40,6 @@ func NewHttpServerEntity(addr string, port string) *HttpServerEntity {
 	r.GET("/routers/:uuid", rr.GetRouter)
 	r.DELETE("/routers/:uuid", rr.DeleteRouter)
 	r.POST("/routers", rr.PostRouter)
-	httpAddr := fmt.Sprintf("[%s]:%s", addr, port)
 	logrus.WithFields(logrus.Fields{"http-addr": httpAddr}).Info("HTTP Server created")
 	e := HttpServerEntity{
 		routers: &rr,
@@ -69,8 +70,11 @@ func (e *HttpServerEntity) Stop() {
 
 // get status of the controller
 func (l *RouterRegistry) Status(c *gin.Context) {
+	status := healthcheck.Status{
+		Ready: true,
+	}
 	c.Header("Cache-Control", "no-cache")
-	c.JSON(http.StatusOK, gin.H{"ready": true})
+	c.JSON(http.StatusOK, status)
 }
 
 // get a router infos

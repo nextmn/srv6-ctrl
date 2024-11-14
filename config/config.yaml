@@ -1,6 +1,7 @@
 pfcp-address: "10.0.60.3"
-http-address: "192.0.2.2"
-http-port: "8080"
+control:
+  uri: "http://192.0.2.2:8080"
+  bind-addr: "192.0.2.2:8080"
 logger:
   level: info
 uplink:

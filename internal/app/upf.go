@@ -43,11 +43,7 @@ func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP, pusher *RulesPusher) er
 }
 
 func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
-	port := "80" // default http port
-	if conf.HTTPPort != nil {
-		port = *conf.HTTPPort
-	}
-	HTTPServer := NewHttpServerEntity(conf.HTTPAddress.String(), port)
+	HTTPServer := NewHttpServerEntity(conf.Control.BindAddr)
 	return HTTPServer
 }
 

@@ -1,7 +1,8 @@
-// Copyright 2023 Louis Royer and the NextMN-SRv6-ctrl contributors. All rights reserved.
+// Copyright 2024 Louis Royer and the NextMN contributors. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
+
 package config
 
 import (
@@ -30,8 +31,7 @@ func ParseConf(file string) (*CtrlConfig, error) {
 
 type CtrlConfig struct {
 	PFCPAddress netip.Addr `yaml:"pfcp-address"`
-	HTTPAddress netip.Addr `yaml:"http-address"`
-	HTTPPort    *string    `yaml:"http-port,omitempty"` // default: 80
+	Control     Control    `yaml:"control"`
 	Logger      *Logger    `yaml:"logger,omitempty"`
 	Uplink      []Rule     `yaml:"uplink"`
 	Downlink    []Rule     `yaml:"downlink"`
