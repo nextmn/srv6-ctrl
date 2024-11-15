@@ -31,7 +31,9 @@ func (s Setup) Run(ctx context.Context) error {
 		return err
 	}
 	StartPFCPServer(ctx, s.PFCPServer)
-	s.HTTPServer.Start()
+	if err := s.HTTPServer.Start(); err != nil {
+		return err
+	}
 	select {
 	case <-ctx.Done():
 		s.HTTPServer.Stop()
