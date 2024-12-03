@@ -19,9 +19,10 @@ type Setup struct {
 }
 
 func NewSetup(conf *config.CtrlConfig) Setup {
+	pfcp := NewPFCPNode(conf)
 	return Setup{
-		HTTPServer:  NewHttpServer(conf),
-		PFCPServer:  NewPFCPNode(conf),
+		HTTPServer:  NewHttpServer(conf, pfcp),
+		PFCPServer:  pfcp,
 		RulesPusher: NewRulesPusher(conf),
 	}
 }

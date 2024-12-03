@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	"github.com/nextmn/json-api/healthcheck"
 	"github.com/nextmn/json-api/jsonapi"
 
@@ -28,11 +29,13 @@ type HttpServerEntity struct {
 type RouterRegistry struct {
 	sync.RWMutex
 	routers jsonapi.RouterMap
+	pfcpSrv *pfcp_networking.PFCPEntityUP
 }
 
-func NewHttpServerEntity(httpAddr string) *HttpServerEntity {
+func NewHttpServerEntity(httpAddr string, pfcp *pfcp_networking.PFCPEntityUP) *HttpServerEntity {
 	rr := RouterRegistry{
 		routers: make(jsonapi.RouterMap),
+		pfcpSrv: pfcp,
 	}
 	// TODO: gin.SetMode(gin.DebugMode) / gin.SetMode(gin.ReleaseMode) depending on log level
 	r := gin.Default()
@@ -76,8 +79,12 @@ func (e *HttpServerEntity) Stop() {
 
 // get status of the controller
 func (l *RouterRegistry) Status(c *gin.Context) {
+	ready := false
+	if (l.pfcpSrv != nil) && (l.pfcpSrv.RecoveryTimeStamp() != nil) {
+		ready = true
+	}
 	status := healthcheck.Status{
-		Ready: true,
+		Ready: ready,
 	}
 	c.Header("Cache-Control", "no-cache")
 	c.JSON(http.StatusOK, status)

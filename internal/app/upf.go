@@ -42,8 +42,8 @@ func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP, pusher *RulesPusher) er
 	return nil
 }
 
-func NewHttpServer(conf *config.CtrlConfig) *HttpServerEntity {
-	HTTPServer := NewHttpServerEntity(conf.Control.BindAddr)
+func NewHttpServer(conf *config.CtrlConfig, srv6Srv *pfcp_networking.PFCPEntityUP) *HttpServerEntity {
+	HTTPServer := NewHttpServerEntity(conf.Control.BindAddr, srv6Srv)
 	return HTTPServer
 }
 
