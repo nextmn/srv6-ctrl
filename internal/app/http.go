@@ -14,7 +14,7 @@ import (
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	"github.com/nextmn/json-api/healthcheck"
-	"github.com/nextmn/json-api/jsonapi"
+	"github.com/nextmn/json-api/jsonapi/n4tosrv6"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
@@ -28,13 +28,13 @@ type HttpServerEntity struct {
 
 type RouterRegistry struct {
 	sync.RWMutex
-	routers jsonapi.RouterMap
+	routers n4tosrv6.RouterMap
 	pfcpSrv *pfcp_networking.PFCPEntityUP
 }
 
 func NewHttpServerEntity(httpAddr string, pfcp *pfcp_networking.PFCPEntityUP) *HttpServerEntity {
 	rr := RouterRegistry{
-		routers: make(jsonapi.RouterMap),
+		routers: make(n4tosrv6.RouterMap),
 		pfcpSrv: pfcp,
 	}
 	// TODO: gin.SetMode(gin.DebugMode) / gin.SetMode(gin.ReleaseMode) depending on log level
@@ -110,7 +110,7 @@ func (r *RouterRegistry) GetRouter(c *gin.Context) {
 
 // post a router infos
 func (r *RouterRegistry) PostRouter(c *gin.Context) {
-	var router jsonapi.Router
+	var router n4tosrv6.Router
 	if err := c.BindJSON(&router); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "could not deserialize", "error": fmt.Sprintf("%v", err)})
 		return

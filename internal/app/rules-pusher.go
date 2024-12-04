@@ -19,7 +19,7 @@ import (
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcpapi "github.com/nextmn/go-pfcp-networking/pfcp/api"
 	"github.com/nextmn/go-pfcp-networking/pfcputil"
-	"github.com/nextmn/json-api/jsonapi"
+	"github.com/nextmn/json-api/jsonapi/n4tosrv6"
 	"github.com/nextmn/rfc9433/encoding"
 	"github.com/nextmn/srv6-ctrl/internal/config"
 )
@@ -105,27 +105,27 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
 
 	for _, r := range pusher.uplink {
 		//TODO: add ArgMobSession
-		srh, err := jsonapi.NewSRH(r.SegmentsList)
+		srh, err := n4tosrv6.NewSRH(r.SegmentsList)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"segments-list": r.SegmentsList,
 			}).WithError(err).Error("Creation of SRH uplink failed")
 			return err
 		}
-		rule := jsonapi.Rule{
+		rule := n4tosrv6.Rule{
 			Enabled: r.Enabled,
 			Type:    "uplink",
-			Match: jsonapi.Match{
-				Header: &jsonapi.GtpHeader{
+			Match: n4tosrv6.Match{
+				Header: &n4tosrv6.GtpHeader{
 					OuterIpSrc: gnb_addr,
 					Teid:       infos.UplinkTeid,
 					InnerIpSrc: &ue_addr,
 				},
-				Payload: &jsonapi.Payload{
+				Payload: &n4tosrv6.Payload{
 					Dst: service_addr,
 				},
 			},
-			Action: jsonapi.Action{
+			Action: n4tosrv6.Action{
 				SRH: *srh,
 			},
 		}
@@ -164,22 +164,22 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
 		}
 		segList[0] = dstIp.String()
 
-		srh, err := jsonapi.NewSRH(segList)
+		srh, err := n4tosrv6.NewSRH(segList)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"segments-list": r.SegmentsList,
 			}).WithError(err).Error("Creation of SRH downlink failed")
 			return err
 		}
-		rule := jsonapi.Rule{
+		rule := n4tosrv6.Rule{
 			Enabled: true,
 			Type:    "downlink",
-			Match: jsonapi.Match{
-				Payload: &jsonapi.Payload{
+			Match: n4tosrv6.Match{
+				Payload: &n4tosrv6.Payload{
 					Dst: ue_addr,
 				},
 			},
-			Action: jsonapi.Action{
+			Action: n4tosrv6.Action{
 				SRH: *srh,
 			},
 		}
