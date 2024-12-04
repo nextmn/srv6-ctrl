@@ -1,7 +1,8 @@
-// Copyright 2023 Louis Royer and the NextMN-SRv6-ctrl contributors. All rights reserved.
+// Copyright 2023 Louis Royer and the NextMN contributors. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
+
 package app
 
 import (
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -32,7 +34,7 @@ type RouterRegistry struct {
 	pfcpSrv *pfcp_networking.PFCPEntityUP
 }
 
-func NewHttpServerEntity(httpAddr string, pfcp *pfcp_networking.PFCPEntityUP) *HttpServerEntity {
+func NewHttpServerEntity(httpAddr netip.AddrPort, pfcp *pfcp_networking.PFCPEntityUP) *HttpServerEntity {
 	rr := RouterRegistry{
 		routers: make(n4tosrv6.RouterMap),
 		pfcpSrv: pfcp,
@@ -48,7 +50,7 @@ func NewHttpServerEntity(httpAddr string, pfcp *pfcp_networking.PFCPEntityUP) *H
 	e := HttpServerEntity{
 		routers: &rr,
 		srv: &http.Server{
-			Addr:    httpAddr,
+			Addr:    httpAddr.String(),
 			Handler: r,
 		},
 	}

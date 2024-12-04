@@ -1,7 +1,8 @@
-// Copyright 2024 Louis Royer and the NextMN-SRv6-ctrl contributors. All rights reserved.
+// Copyright 2024 Louis Royer and the NextMN contributors. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 // SPDX-License-Identifier: MIT
+
 package app
 
 import (
@@ -13,15 +14,16 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-	"github.com/wmnsk/go-pfcp/ie"
-
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcpapi "github.com/nextmn/go-pfcp-networking/pfcp/api"
 	"github.com/nextmn/go-pfcp-networking/pfcputil"
+	"github.com/nextmn/json-api/jsonapi"
 	"github.com/nextmn/json-api/jsonapi/n4tosrv6"
 	"github.com/nextmn/rfc9433/encoding"
 	"github.com/nextmn/srv6-ctrl/internal/config"
+
+	"github.com/sirupsen/logrus"
+	"github.com/wmnsk/go-pfcp/ie"
 )
 
 const UserAgent = "go-github-nextmn-srv6-ctrl"
@@ -48,8 +50,8 @@ func NewRulesPusher(config *config.CtrlConfig) *RulesPusher {
 	}
 }
 
-func (pusher *RulesPusher) pushSingleRule(client http.Client, uri string, data []byte) error {
-	req, err := http.NewRequest(http.MethodPost, uri+"/rules", bytes.NewBuffer(data))
+func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Client, uri jsonapi.ControlURI, data []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uri.JoinPath("rules").String(), bytes.NewBuffer(data))
 	if err != nil {
 		logrus.WithError(err).Error("could not create http request")
 		return err
@@ -76,7 +78,7 @@ func (pusher *RulesPusher) pushSingleRule(client http.Client, uri string, data [
 	return nil
 }
 
-func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
+func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error {
 	i, ok := pusher.ues.Load(ue_ip)
 	infos := i.(*ueInfos)
 	infos.Lock()
@@ -137,7 +139,7 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			return pusher.pushSingleRule(client, r.ControlURI, rule_json)
+			return pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
 		}()
 
 	}
@@ -191,7 +193,7 @@ func (pusher *RulesPusher) pushRTRRule(ue_ip string) error {
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			return pusher.pushSingleRule(client, r.ControlURI, rule_json)
+			return pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
 		}()
 
 	}
@@ -317,7 +319,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pusher.pushRTRRule(ip.(string))
+			pusher.pushRTRRule(ctx, ip.(string))
 			// TODO: check pushRTRRule return code and send pfcp error on failure
 		}()
 		return true
