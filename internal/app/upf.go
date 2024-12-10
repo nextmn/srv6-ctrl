@@ -17,7 +17,7 @@ import (
 )
 
 func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
-	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress.String(), conf.PFCPAddress.String())
+	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress.String(), conf.PFCPAddress)
 }
 func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP, pusher *RulesPusher) error {
 	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
