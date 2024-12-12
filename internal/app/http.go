@@ -26,6 +26,7 @@ import (
 type HttpServerEntity struct {
 	srv     *http.Server
 	routers *RouterRegistry
+	closed  chan struct{}
 }
 
 type RouterRegistry struct {
@@ -53,11 +54,12 @@ func NewHttpServerEntity(httpAddr netip.AddrPort, pfcp *pfcp_networking.PFCPEnti
 			Addr:    httpAddr.String(),
 			Handler: r,
 		},
+		closed: make(chan struct{}),
 	}
 	return &e
 }
 
-func (e *HttpServerEntity) Start() error {
+func (e *HttpServerEntity) Start(ctx context.Context) error {
 	l, err := net.Listen("tcp", e.srv.Addr)
 	if err != nil {
 		return err
@@ -68,14 +70,26 @@ func (e *HttpServerEntity) Start() error {
 			logrus.WithError(err).Error("Http Server error")
 		}
 	}(l)
+	go func(ctx context.Context) {
+		defer close(e.closed)
+		select {
+		case <-ctx.Done():
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			if err := e.srv.Shutdown(ctxShutdown); err != nil {
+				logrus.WithError(err).Info("HTTP Server Shutdown")
+			}
+		}
+	}(ctx)
 	return nil
 }
 
-func (e *HttpServerEntity) Stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) // context.Background() is already Done()
-	defer cancel()
-	if err := e.srv.Shutdown(ctx); err != nil {
-		logrus.WithError(err).Info("HTTP Server Shutdown")
+func (e *HttpServerEntity) WaitShutdown(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-e.closed:
+		return nil
 	}
 }
 

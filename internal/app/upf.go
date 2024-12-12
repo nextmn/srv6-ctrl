@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/nextmn/srv6-ctrl/internal/config"
 
@@ -16,8 +17,16 @@ import (
 	"github.com/wmnsk/go-pfcp/message"
 )
 
-func NewPFCPNode(conf *config.CtrlConfig) *pfcp_networking.PFCPEntityUP {
-	return pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress.String(), conf.PFCPAddress)
+type Upf struct {
+	pfcpentity *pfcp_networking.PFCPEntityUP
+	closed     chan struct{}
+}
+
+func NewUpf(conf *config.CtrlConfig) *Upf {
+	return &Upf{
+		pfcpentity: pfcp_networking.NewPFCPEntityUP(conf.PFCPAddress.String(), conf.PFCPAddress),
+		closed:     make(chan struct{}),
+	}
 }
 func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP, pusher *RulesPusher) error {
 	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
@@ -48,11 +57,27 @@ func NewHttpServer(conf *config.CtrlConfig, srv6Srv *pfcp_networking.PFCPEntityU
 	return HTTPServer
 }
 
-func StartPFCPServer(ctx context.Context, srv *pfcp_networking.PFCPEntityUP) {
+func (upf *Upf) Start(ctx context.Context) error {
 	go func(ctx context.Context, srv *pfcp_networking.PFCPEntityUP) {
 		logrus.Info("Starting PFCP Server")
 		if err := srv.ListenAndServeContext(ctx); err != nil {
 			logrus.WithError(err).Error("PFCP Server Shutdown")
+			close(upf.closed)
 		}
-	}(ctx, srv)
+	}(ctx, upf.pfcpentity)
+	ctxTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	if err := upf.pfcpentity.WaitReady(ctxTimeout); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (upf *Upf) WaitShutdown(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-upf.closed:
+		return nil
+	}
 }

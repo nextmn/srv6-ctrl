@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 
@@ -15,15 +16,16 @@ import (
 
 type Setup struct {
 	HTTPServer  *HttpServerEntity
+	Upf         *Upf
 	PFCPServer  *pfcp_networking.PFCPEntityUP
 	RulesPusher *RulesPusher
 }
 
 func NewSetup(conf *config.CtrlConfig) Setup {
-	pfcp := NewPFCPNode(conf)
+	upf := NewUpf(conf)
 	return Setup{
-		HTTPServer:  NewHttpServer(conf, pfcp),
-		PFCPServer:  pfcp,
+		HTTPServer:  NewHttpServer(conf, upf.pfcpentity),
+		Upf:         upf,
 		RulesPusher: NewRulesPusher(conf),
 	}
 }
@@ -32,14 +34,16 @@ func (s Setup) Run(ctx context.Context) error {
 	if err := PFCPServerAddHooks(s.PFCPServer, s.RulesPusher); err != nil {
 		return err
 	}
-	StartPFCPServer(ctx, s.PFCPServer)
-	if err := s.HTTPServer.Start(); err != nil {
+	if err := s.Upf.Start(ctx); err != nil {
 		return err
 	}
-	select {
-	case <-ctx.Done():
-		s.HTTPServer.Stop()
-		s.PFCPServer.Close()
-		return nil
+	if err := s.HTTPServer.Start(ctx); err != nil {
+		return err
 	}
+	ctxShutdown, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	// Try to end before 1s…
+	s.HTTPServer.WaitShutdown(ctxShutdown)
+	s.Upf.WaitShutdown(ctxShutdown)
+	return nil
 }
