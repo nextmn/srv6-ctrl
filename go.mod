@@ -6,7 +6,7 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/nextmn/go-pfcp-networking v0.0.41-0.20241212103129-24fe84808302
+	github.com/nextmn/go-pfcp-networking v0.0.41
 	github.com/nextmn/json-api v0.0.14
 	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/nextmn/rfc9433 v0.0.2
