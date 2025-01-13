@@ -28,22 +28,22 @@ func NewUpf(conf *config.CtrlConfig) *Upf {
 		closed:     make(chan struct{}),
 	}
 }
-func PFCPServerAddHooks(s *pfcp_networking.PFCPEntityUP, pusher *RulesPusher) error {
-	if err := s.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+func (upf *Upf) PFCPServerAddHooks(pusher *RulesPusher) error {
+	if err := upf.pfcpentity.AddHandler(message.MsgTypeSessionEstablishmentRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionEstablishmentRequestHandler(ctx, msg)
 		if err == nil {
-			go s.LogPFCPRules()
-			pusher.updateRoutersRules(ctx, message.MsgTypeSessionEstablishmentRequest, msg, s)
+			go upf.pfcpentity.LogPFCPRules()
+			pusher.updateRoutersRules(ctx, message.MsgTypeSessionEstablishmentRequest, msg, upf.pfcpentity)
 		}
 		return out, err
 	}); err != nil {
 		return err
 	}
-	if err := s.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
+	if err := upf.pfcpentity.AddHandler(message.MsgTypeSessionModificationRequest, func(ctx context.Context, msg pfcp_networking.ReceivedMessage) (*pfcp_networking.OutcomingMessage, error) {
 		out, err := pfcp_networking.DefaultSessionModificationRequestHandler(ctx, msg)
 		if err == nil {
-			go s.LogPFCPRules()
-			pusher.updateRoutersRules(ctx, message.MsgTypeSessionModificationRequest, msg, s)
+			go upf.pfcpentity.LogPFCPRules()
+			pusher.updateRoutersRules(ctx, message.MsgTypeSessionModificationRequest, msg, upf.pfcpentity)
 		}
 		return out, err
 	}); err != nil {

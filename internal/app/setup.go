@@ -9,15 +9,12 @@ import (
 	"context"
 	"time"
 
-	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
-
 	"github.com/nextmn/srv6-ctrl/internal/config"
 )
 
 type Setup struct {
 	HTTPServer  *HttpServerEntity
 	Upf         *Upf
-	PFCPServer  *pfcp_networking.PFCPEntityUP
 	RulesPusher *RulesPusher
 }
 
@@ -31,7 +28,7 @@ func NewSetup(conf *config.CtrlConfig) Setup {
 }
 
 func (s Setup) Run(ctx context.Context) error {
-	if err := PFCPServerAddHooks(s.PFCPServer, s.RulesPusher); err != nil {
+	if err := s.Upf.PFCPServerAddHooks(s.RulesPusher); err != nil {
 		return err
 	}
 	if err := s.Upf.Start(ctx); err != nil {

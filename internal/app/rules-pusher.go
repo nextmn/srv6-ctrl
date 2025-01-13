@@ -205,7 +205,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 	logrus.Debug("Into updateRoutersRules")
 	var wg0 sync.WaitGroup
 	for _, session := range e.GetPFCPSessions() {
-		logrus.Debug("In for loop…")
+		logrus.Trace("In for loop…")
 		wg0.Add(1)
 		go func() error {
 			defer wg0.Done()
