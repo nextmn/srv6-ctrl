@@ -24,6 +24,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/wmnsk/go-pfcp/ie"
+	"github.com/wmnsk/go-pfcp/message"
 )
 
 const UserAgent = "go-github-nextmn-srv6-ctrl"
@@ -209,8 +210,104 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 	return nil
 }
 
-func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, message pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
+func (pusher *RulesPusher) pushHandover(ctx context.Context, ue string, handoverTo jsonapi.Fteid) {
+	//TODO Handover
+
+}
+
+func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, msg pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
+	if msgType == message.MsgTypeSessionModificationRequest {
+		logrus.Debug("session modification request")
+		// check if handover
+		msgMod, ok := msg.Message.(*message.SessionModificationRequest)
+		if !ok {
+			logrus.Error("could not cast to sessionModifationRequest")
+			return
+		}
+		logrus.Debug("checking session modification request for handover")
+		if (len(msgMod.CreatePDR) == 0) && (len(msgMod.UpdatePDR) == 0) && (len(msgMod.CreateFAR) == 0) && (len(msgMod.UpdateFAR) == 1) {
+			// this is only a far update, so it is probably an handover…
+			updateFpIes, err := msgMod.UpdateFAR[0].UpdateForwardingParameters()
+			if err != nil {
+				logrus.WithError(err).Debug("No Update Forwarding parameters: not a valid handover")
+				return
+			}
+			updateFp := ie.NewUpdateForwardingParameters(updateFpIes...)
+
+			if dest_interface, err := updateFp.DestinationInterface(); err != nil {
+				logrus.Debug("No destination interface: not a valid handover")
+				return
+			} else if dest_interface != ie.DstInterfaceAccess {
+				logrus.Debug("Destination interface is not access: not a valid handover")
+				return
+			}
+			farid, err := msgMod.UpdateFAR[0].FARID()
+			if err != nil {
+				logrus.Debug("No FARID: not a valid handover")
+				return
+			}
+			logrus.WithFields(logrus.Fields{
+				"farid": farid,
+			}).Debug("handover detected")
+
+			ohc, err := updateFp.OuterHeaderCreation()
+			if err != nil {
+				return
+			}
+			addr, ok := netip.AddrFromSlice(ohc.IPv4Address.To4())
+			if !ok {
+				return
+			}
+			handoverTo := jsonapi.Fteid{
+				Teid: ohc.TEID,
+				Addr: addr,
+			}
+
+			handoverDone := false
+			// looking for a pdr with this farid to find ue ip address
+			for _, session := range e.GetPFCPSessions() {
+				if handoverDone {
+					break
+				}
+				s := make(chan struct{})
+				go func() { // in a goroutine to trigger the defer
+					session.RLock()
+					defer session.RUnlock()
+					session.ForeachUnsortedPDR(func(pdr pfcpapi.PDRInterface) error {
+						id, err := pdr.FARID()
+						if err != nil {
+							// skip
+							return nil
+						}
+						if id != farid {
+							// skip
+							return nil
+						}
+						pdrid, err := pdr.ID()
+						if err != nil {
+							return nil
+						}
+						ue, err := pdr.UEIPAddress()
+						if err != nil {
+							return nil
+						}
+						logrus.WithFields(logrus.Fields{
+							"farid": farid,
+							"pdrid": pdrid,
+							"ue":    ue,
+						}).Debug("UE identified for handover")
+						pusher.pushHandover(ctx, ue.IPv4Address.String(), handoverTo)
+						handoverDone = true
+						return nil
+					})
+					s <- struct{}{}
+				}()
+				<-s
+			}
+			return
+		}
+	}
 	var wg0 sync.WaitGroup
 	for _, session := range e.GetPFCPSessions() {
 		logrus.Trace("In for loop…")
