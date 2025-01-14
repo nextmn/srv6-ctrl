@@ -35,7 +35,7 @@ type RulesPusher struct {
 }
 
 type ueInfos struct {
-	UplinkTeid   uint32
+	UplinkFTeid  jsonapi.Fteid
 	DownlinkTeid uint32
 	Gnb          string
 	Pushed       bool
@@ -95,7 +95,8 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		"ue-ip":         ue_ip,
 		"gnb-ip":        infos.Gnb,
 		"teid-downlink": infos.DownlinkTeid,
-		"teid-uplink":   infos.UplinkTeid,
+		"teid-uplink":   infos.UplinkFTeid.Teid,
+		"addr-uplink":   infos.UplinkFTeid.Addr,
 		"service-ip":    service_ip,
 	}).Info("Pushing Router Rules")
 	ue_addr := netip.MustParseAddr(ue_ip)           // FIXME: don't trust user input => ParseAddr
@@ -114,13 +115,20 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 			}).WithError(err).Error("Creation of SRH uplink failed")
 			return err
 		}
+		var area []netip.Prefix
+		if r.Area != nil {
+			area = *r.Area
+		} else {
+			// if no area is defined, create a new-one with only this gnb
+			area = []netip.Prefix{netip.PrefixFrom(gnb_addr, 32)}
+		}
 		rule := n4tosrv6.Rule{
 			Enabled: r.Enabled,
 			Type:    "uplink",
 			Match: n4tosrv6.Match{
 				Header: &n4tosrv6.GtpHeader{
-					OuterIpSrc: gnb_addr,
-					Teid:       infos.UplinkTeid,
+					OuterIpSrc: area,
+					FTeid:      infos.UplinkFTeid,
 					InnerIpSrc: &ue_addr,
 				},
 				Payload: &n4tosrv6.Payload{
@@ -234,8 +242,13 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						logrus.WithError(err).Debug("skip: no fteid")
 						return nil
 					}
+					addr, ok := netip.AddrFromSlice(fteid.IPv4Address.To4())
+					if !ok {
+						logrus.WithError(err).Debug("skip: could not parse uplink fteid addr")
+						return nil
+					}
 					if ue, loaded := pusher.ues.LoadOrStore(ue_ipv4, &ueInfos{
-						UplinkTeid: fteid.TEID,
+						UplinkFTeid: jsonapi.Fteid{Teid: fteid.TEID, Addr: addr},
 					}); loaded {
 						logrus.WithFields(logrus.Fields{
 							"teid-uplink": fteid.TEID,
@@ -243,7 +256,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						}).Debug("Updating UeInfos")
 
 						ue.(*ueInfos).Lock()
-						ue.(*ueInfos).UplinkTeid = fteid.TEID
+						ue.(*ueInfos).UplinkFTeid = jsonapi.Fteid{Teid: fteid.TEID, Addr: addr}
 						ue.(*ueInfos).Unlock()
 					} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
 						logrus.WithFields(logrus.Fields{
@@ -314,7 +327,8 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 			"ue-ipv4":       ip,
 			"gnb-ipv4":      ue.(*ueInfos).Gnb,
 			"teid-downlink": ue.(*ueInfos).DownlinkTeid,
-			"teid-uplink":   ue.(*ueInfos).UplinkTeid,
+			"teid-uplink":   ue.(*ueInfos).UplinkFTeid.Teid,
+			"addr-uplink":   ue.(*ueInfos).UplinkFTeid.Addr,
 		}).Debug("PushRTRRule")
 		wg.Add(1)
 		go func() {
