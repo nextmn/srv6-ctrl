@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"sync"
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
@@ -36,11 +37,18 @@ type RulesPusher struct {
 }
 
 type ueInfos struct {
+	sync.Mutex
+
 	UplinkFTeid  jsonapi.Fteid
 	DownlinkTeid uint32
 	Gnb          string
 	Pushed       bool
-	sync.Mutex
+
+	AnchorsRules []*url.URL
+	AnchorsLock  sync.Mutex
+
+	SRGWRules []*url.URL
+	SRGWLock  sync.Mutex
 }
 
 func NewRulesPusher(config *config.CtrlConfig) *RulesPusher {
@@ -51,32 +59,35 @@ func NewRulesPusher(config *config.CtrlConfig) *RulesPusher {
 	}
 }
 
-func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Client, uri jsonapi.ControlURI, data []byte) error {
+func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Client, uri jsonapi.ControlURI, data []byte) (*url.URL, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uri.JoinPath("rules").String(), bytes.NewBuffer(data))
 	if err != nil {
 		logrus.WithError(err).Error("could not create http request")
-		return err
+		return nil, err
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Could not push rules: server not responding")
-		return fmt.Errorf("Could not push rules: server not responding")
+		return nil, fmt.Errorf("Could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
 		logrus.WithError(err).Error("HTTP Bad Request")
-		return fmt.Errorf("HTTP Bad request")
+		return nil, fmt.Errorf("HTTP Bad request")
 	} else if resp.StatusCode >= 500 {
 		logrus.WithError(err).Error("HTTP internal error")
-		return fmt.Errorf("HTTP internal error")
+		return nil, fmt.Errorf("HTTP internal error")
+	} else if resp.StatusCode == 201 {
+		loc := resp.Header.Get("Location")
+		uloc, err := url.Parse(loc)
+		if err != nil {
+			return nil, err
+		}
+		return uri.ResolveReference(uloc), nil
 	}
-	//else if resp.StatusCode == 201{
-	//OK: store resource
-	//_ := resp.Header.Get("Location")
-	//}
-	return nil
+	return nil, fmt.Errorf("No Location provided")
 }
 
 func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error {
@@ -148,7 +159,13 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			return pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			infos.SRGWLock.Lock()
+			defer infos.SRGWLock.Unlock()
+			url, err := pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			if err == nil {
+				infos.SRGWRules = append(infos.SRGWRules, url)
+			}
+			return err
 		}()
 
 	}
@@ -202,7 +219,13 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			return pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			infos.AnchorsLock.Lock()
+			defer infos.AnchorsLock.Unlock()
+			url, err := pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			if err == nil {
+				infos.AnchorsRules = append(infos.AnchorsRules, url)
+			}
+			return err
 		}()
 
 	}
@@ -295,7 +318,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						logrus.WithFields(logrus.Fields{
 							"farid": farid,
 							"pdrid": pdrid,
-							"ue":    ue,
+							"ue":    ue.IPv4Address.String(),
 						}).Debug("UE identified for handover")
 						pusher.pushHandover(ctx, ue.IPv4Address.String(), handoverTo)
 						handoverDone = true
@@ -345,7 +368,9 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						return nil
 					}
 					if ue, loaded := pusher.ues.LoadOrStore(ue_ipv4, &ueInfos{
-						UplinkFTeid: jsonapi.Fteid{Teid: fteid.TEID, Addr: addr},
+						UplinkFTeid:  jsonapi.Fteid{Teid: fteid.TEID, Addr: addr},
+						AnchorsRules: make([]*url.URL, 0),
+						SRGWRules:    make([]*url.URL, 0),
 					}); loaded {
 						logrus.WithFields(logrus.Fields{
 							"teid-uplink": fteid.TEID,
@@ -380,6 +405,8 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						if ue, loaded := pusher.ues.LoadOrStore(ue_ipv4, &ueInfos{
 							DownlinkTeid: teid_downlink,
 							Gnb:          gnb_ipv4,
+							AnchorsRules: make([]*url.URL, 0),
+							SRGWRules:    make([]*url.URL, 0),
 						}); loaded {
 							logrus.WithFields(logrus.Fields{
 								"gnb-ipv4":      gnb_ipv4,
