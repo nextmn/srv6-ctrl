@@ -130,7 +130,7 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		return nil // already pushed, nothing to do
 	}
 	infos.Pushed = true
-	service_ip := "10.4.0.1"
+	service_ip := "10.4.0.1" // FIXME: don't hardcode
 	logrus.WithFields(logrus.Fields{
 		"ue-ip":         ue_ip,
 		"gnb-ip":        infos.Gnb,
@@ -234,7 +234,8 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 			return err
 		}
 		action := n4tosrv6.Action{
-			SRH: *srh,
+			SRH:        *srh,
+			SourceGtp4: r.SrgwGtp4,
 		}
 		rule := n4tosrv6.Rule{
 			Enabled: true,

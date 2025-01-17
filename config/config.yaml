@@ -22,9 +22,11 @@ uplink:
 downlink:
   - control-uri: "http://[fd00:0:0:0:2:8000:0:4]:8080"
     enabled: true
+    srgw-gtp4: "10.3.0.1"
     segments-list:
       - "fc00:1:1::/48"
   - control-uri: "http://[fd00:0:0:0:2:8000:0:5]:8080"
     enabled: true
+    srgw-gtp4: "10.3.0.1"
     segments-list:
       - "fc00:1:1::/48"

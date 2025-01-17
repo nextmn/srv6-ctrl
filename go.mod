@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/nextmn/go-pfcp-networking v0.0.42
-	github.com/nextmn/json-api v0.0.16
+	github.com/nextmn/json-api v0.0.17
 	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/nextmn/rfc9433 v0.0.2
 	github.com/sirupsen/logrus v1.9.3
@@ -43,5 +43,5 @@ require (
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	google.golang.org/protobuf v1.36.2 // indirect
+	google.golang.org/protobuf v1.36.3 // indirect
 )
