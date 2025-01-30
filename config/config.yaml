@@ -10,6 +10,7 @@ uplink:
     area:
       - "10.0.0.1/32" # gnb1
       - "10.0.0.2/32" # gnb2
+    service: "10.4.0.1"
     segments-list:
       - "fc00:2:1::"
   - control-uri: "http://[fd00:0:0:0:2:8000:0:2]:8080"
@@ -17,6 +18,7 @@ uplink:
     area:
       - "10.0.0.1/32" # gnb1
       - "10.0.0.2/32" # gnb2
+    service: "10.4.0.1"
     segments-list:
       - "fc00:3:1::"
 downlink:

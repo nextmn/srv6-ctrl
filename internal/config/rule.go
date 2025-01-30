@@ -17,4 +17,5 @@ type Rule struct {
 	Enabled      bool               `yaml:"enabled"`
 	SegmentsList []string           `yaml:"segments-list"`       // Segment[0] is the ultimate node, Segment[n-1] is the next hop ; Segment[0] can be a prefix (for downlink)
 	SrgwGtp4     *netip.Addr        `yaml:"srgw-gtp4,omitempty"` // GTP4 Address of the SRGW (for downlink rules only)
+	Service      *netip.Addr        `yaml:"service,omitempty"`   // IP Address of the service (for uplink rules only)
 }

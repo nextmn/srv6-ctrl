@@ -130,23 +130,29 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		return nil // already pushed, nothing to do
 	}
 	infos.Pushed = true
-	service_ip := "10.4.0.1" // FIXME: don't hardcode
 	logrus.WithFields(logrus.Fields{
 		"ue-ip":         ue_ip,
 		"gnb-ip":        infos.Gnb,
 		"teid-downlink": infos.DownlinkTeid,
 		"teid-uplink":   infos.UplinkFTeid.Teid,
 		"addr-uplink":   infos.UplinkFTeid.Addr,
-		"service-ip":    service_ip,
 	}).Info("Pushing Router Rules")
-	ue_addr := netip.MustParseAddr(ue_ip)           // FIXME: don't trust user input => ParseAddr
-	gnb_addr := netip.MustParseAddr(infos.Gnb)      // FIXME: don't trust user input => ParseAddr
-	service_addr := netip.MustParseAddr(service_ip) // FIXME: don't trust user input => ParseAddr
+	ue_addr, err := netip.ParseAddr(ue_ip)
+	if err != nil {
+		return err
+	}
+	gnb_addr, err := netip.ParseAddr(infos.Gnb)
+	if err != nil {
+		return err
+	}
 
 	client := http.Client{}
 	var wg sync.WaitGroup
 
 	for _, r := range pusher.uplink {
+		if r.Service == nil {
+			return fmt.Errorf("service configurated is nil for uplink rule")
+		}
 		//TODO: add ArgMobSession
 		srh, err := n4tosrv6.NewSRH(r.SegmentsList)
 		if err != nil {
@@ -175,7 +181,8 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 					InnerIpSrc: &ue_addr,
 				},
 				Payload: &n4tosrv6.Payload{
-					Dst: service_addr,
+					// TODO: allow multiple services
+					Dst: *r.Service,
 				},
 			},
 			Action: action,
