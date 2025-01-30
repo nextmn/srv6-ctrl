@@ -41,6 +41,12 @@ type RuleAction struct {
 	Action       *n4tosrv6.Action
 	GtpDstPrefix netip.Prefix
 }
+
+type HandoverInfos struct {
+	UlTargetSrgw jsonapi.Fteid
+	DlTargetGnb  *jsonapi.Fteid
+}
+
 type ueInfos struct {
 	sync.Mutex
 
@@ -49,8 +55,9 @@ type ueInfos struct {
 	Gnb          string
 	Pushed       bool
 
-	AnchorsRules []*RuleAction
-	AnchorsLock  sync.RWMutex
+	HandoverInfos *HandoverInfos
+	AnchorsRules  []*RuleAction
+	AnchorsLock   sync.RWMutex
 
 	SRGWRules []*RuleAction
 	SRGWLock  sync.RWMutex
@@ -125,6 +132,193 @@ func gnbInArea(gnb netip.Addr, area []netip.Prefix) bool {
 		}
 	}
 	return false
+}
+
+func (pusher *RulesPusher) pushHandoverAcrossAreas(ctx context.Context, ue_ip string) error {
+	i, ok := pusher.ues.Load(ue_ip)
+	if !ok {
+		return fmt.Errorf("UE not in ue list")
+	}
+	infos := i.(*ueInfos)
+	infos.Lock()
+	defer infos.Unlock()
+	if !infos.Pushed {
+		return nil // not pushed, nothing to do
+	}
+	if infos.HandoverInfos == nil {
+		return nil // no handover
+	}
+	if infos.HandoverInfos.DlTargetGnb == nil {
+		return nil // not enough info, yet
+	}
+	gnb_addr := infos.HandoverInfos.DlTargetGnb.Addr
+	ue_addr, err := netip.ParseAddr(ue_ip)
+	if err != nil {
+		return err
+	}
+	client := http.Client{}
+	logrus.WithFields(logrus.Fields{
+		"dl-teid": infos.HandoverInfos.DlTargetGnb.Teid,
+		"dl-addr": infos.HandoverInfos.DlTargetGnb.Addr,
+		"ul-teid": infos.HandoverInfos.UlTargetSrgw.Teid,
+		"ul-addr": infos.HandoverInfos.UlTargetSrgw.Addr,
+		"ue-ip":   ue_ip,
+	}).Info("Pushing Handover Rules")
+	var wg sync.WaitGroup
+
+	for _, r := range pusher.uplink {
+		if r.Service == nil {
+			return fmt.Errorf("service configurated is nil for uplink rule")
+		}
+		//TODO: add ArgMobSession
+		srh, err := n4tosrv6.NewSRH(r.SegmentsList)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"segments-list": r.SegmentsList,
+			}).WithError(err).Error("Creation of SRH uplink failed")
+			return err
+		}
+		var area []netip.Prefix
+		if r.Area != nil {
+			area = *r.Area
+		} else {
+			// if no area is defined, create a new-one with only this gnb
+			area = []netip.Prefix{netip.PrefixFrom(gnb_addr, 32)}
+		}
+		// check infos.Gnb in area
+		if !gnbInArea(gnb_addr, area) {
+			continue
+		}
+
+		action := n4tosrv6.Action{
+			SRH: *srh,
+		}
+		rule := n4tosrv6.Rule{
+			Enabled: r.Enabled,
+			Type:    "uplink",
+			Match: n4tosrv6.Match{
+				Header: &n4tosrv6.GtpHeader{
+					OuterIpSrc: area,
+					FTeid:      infos.HandoverInfos.UlTargetSrgw,
+					InnerIpSrc: &ue_addr,
+				},
+				Payload: &n4tosrv6.Payload{
+					// TODO: allow multiple services
+					Dst: *r.Service,
+				},
+			},
+			Action: action,
+		}
+		rule_json, err := json.Marshal(rule)
+		if err != nil {
+			logrus.WithError(err).Error("Could not marshal json")
+			return err
+		}
+		wg.Add(1)
+		// TODO: remove old rules
+		go func() error {
+			defer wg.Done()
+			//infos.SRGWLock.Lock()
+			//defer infos.SRGWLock.Unlock()
+			_, _ = pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			// TODO: store this (after old rules are removed)
+			//if err == nil {
+			//	infos.SRGWRules = append(infos.SRGWRules, &RuleAction{
+			//		Url:    url,
+			//		Action: &action,
+			//	})
+			//}
+			return err
+		}()
+
+	}
+
+	for _, r := range pusher.downlink {
+		var area []netip.Prefix
+		if r.Area != nil {
+			area = *r.Area
+		} else {
+			// if no area is defined, create a new-one with only this gnb
+			area = []netip.Prefix{netip.PrefixFrom(gnb_addr, 32)}
+		}
+		// check infos.Gnb in area
+		if !gnbInArea(gnb_addr, area) {
+			continue
+		}
+		if len(r.SegmentsList) == 0 {
+			logrus.Error("Empty segments list for downlink")
+			return fmt.Errorf("Empty segments list for downlink")
+		}
+		segList := make([]string, len(r.SegmentsList))
+		copy(segList, r.SegmentsList)
+		prefix, err := netip.ParsePrefix(r.SegmentsList[0])
+		if err != nil {
+			return err
+		}
+		dst := encoding.NewMGTP4IPv6Dst(prefix, gnb_addr.As4(), encoding.NewArgsMobSession(0, false, false, infos.HandoverInfos.DlTargetGnb.Teid))
+		dstB, err := dst.Marshal()
+		if err != nil {
+			return err
+		}
+		dstIp, ok := netip.AddrFromSlice(dstB)
+		if !ok {
+			return fmt.Errorf("could not convert MGTP4IPv6Dst to netip.Addr")
+		}
+		// note: in srv6, segment[n] is the first segment of the path, and segment[0] is the last segment in the path
+		// because Segment-Left is a pointer to the current segment and is decremented each SR-hop
+		segList[0] = dstIp.String()
+
+		srh, err := n4tosrv6.NewSRH(segList)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"segments-list": r.SegmentsList,
+			}).WithError(err).Error("Creation of SRH downlink failed")
+			return err
+		}
+		action := n4tosrv6.Action{
+			SRH:        *srh,
+			SourceGtp4: r.SrgwGtp4,
+		}
+		rule := n4tosrv6.Rule{
+			Enabled: true,
+			Type:    "downlink",
+			Match: n4tosrv6.Match{
+				Payload: &n4tosrv6.Payload{
+					Dst: ue_addr,
+				},
+			},
+			Action: action,
+		}
+		rule_json, err := json.Marshal(rule)
+		if err != nil {
+			logrus.WithError(err).Error("Could not marshal json")
+			return err
+		}
+		wg.Add(1)
+		// TODO: remove old rules
+		go func() error {
+			defer wg.Done()
+			//infos.AnchorsLock.Lock()
+			//defer infos.AnchorsLock.Unlock()
+			_, _ = pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			// TODO: store this (after old rules are removed)
+			//if err == nil {
+			//	infos.AnchorsRules = append(infos.AnchorsRules, &RuleAction{
+			//		Url:          url,
+			//		Action:       &action,
+			//		GtpDstPrefix: prefix,
+			//	})
+			//}
+			return err
+		}()
+
+	}
+	wg.Wait()
+	infos.HandoverInfos = nil // reset handover state
+	pusher.ues.Store(ue_ip, infos)
+
+	return nil
+
 }
 
 func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error {
@@ -376,33 +570,6 @@ func (pusher *RulesPusher) pushHandover(ctx context.Context, ue_ip string, hando
 
 func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, msg pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
-	// detect handover with indirect forwarding
-
-	// 1. Establishment request:
-	// 1.1. new PDR UL (srgw1+teid)
-	// 1.2 FAR to edge
-	// -> we have UE ip and UL fteid, but we don't have gnb DL fteid yet
-	// => we don't know the area of the UE
-	// * store ul_fteids[ue_ip] = this ul fteid
-
-	// 2. Modification request:
-	// 2.1 PDR new fteid srgw1+teid (forw)
-	// 2.2 FAR gnbl3
-	// -> we don't have UE ip, we have a forw fteid
-
-	// 3. Modification request:
-	// 3.1 PDR new fteid srgw0+teid (forw)
-	// 3.2 FAR srgw1+teid
-	// -> we don't have UE ip, we have the forw fteid from step 2, we have the gnb fteid
-
-	// 4. Modification request:
-	// 4.1. PDR match UE
-	// 4.2. FAR to gnbl3
-	// -> we have the UE ip, we have the gnb DL fteid
-	// => we know the area of the UE
-	// * establish UL using fteid from step 1
-	// * establish DL using fteid from step 4
-
 	if msgType == message.MsgTypeSessionModificationRequest {
 		logrus.Debug("session modification request")
 		// check if handover
@@ -542,14 +709,31 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 						AnchorsRules: make([]*RuleAction, 0),
 						SRGWRules:    make([]*RuleAction, 0),
 					}); loaded {
-						logrus.WithFields(logrus.Fields{
-							"teid-uplink": fteid.TEID,
-							"ue-ipv4":     ue_ipv4,
-						}).Debug("Updating UeInfos")
+						if ue.(*ueInfos).Pushed {
+							if addr == ue.(*ueInfos).UplinkFTeid.Addr && fteid.TEID == ue.(*ueInfos).UplinkFTeid.Teid {
+								return nil // old data
+							}
+							logrus.WithFields(logrus.Fields{
+								"teid-uplink": fteid.TEID,
+								"addr-uplink": addr,
+								"ue-ipv4":     ue_ipv4,
+							}).Debug("Updating UeInfos with handoverInfos for uplink")
+							ue.(*ueInfos).Lock()
+							ue.(*ueInfos).HandoverInfos = &HandoverInfos{
+								UlTargetSrgw: jsonapi.Fteid{Teid: fteid.TEID, Addr: addr},
+							}
+							ue.(*ueInfos).Unlock()
 
-						ue.(*ueInfos).Lock()
-						ue.(*ueInfos).UplinkFTeid = jsonapi.Fteid{Teid: fteid.TEID, Addr: addr}
-						ue.(*ueInfos).Unlock()
+						} else {
+							logrus.WithFields(logrus.Fields{
+								"teid-uplink": fteid.TEID,
+								"ue-ipv4":     ue_ipv4,
+							}).Debug("Updating UeInfos")
+
+							ue.(*ueInfos).Lock()
+							ue.(*ueInfos).UplinkFTeid = jsonapi.Fteid{Teid: fteid.TEID, Addr: addr}
+							ue.(*ueInfos).Unlock()
+						}
 					} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
 						logrus.WithFields(logrus.Fields{
 							"teid-uplink": fteid.TEID,
@@ -578,15 +762,33 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 							AnchorsRules: make([]*RuleAction, 0),
 							SRGWRules:    make([]*RuleAction, 0),
 						}); loaded {
-							logrus.WithFields(logrus.Fields{
-								"gnb-ipv4":      gnb_ipv4,
-								"teid-downlink": teid_downlink,
-								"ue-ipv4":       ue_ipv4,
-							}).Debug("Updating UeInfos")
-							ue.(*ueInfos).Lock()
-							ue.(*ueInfos).Gnb = gnb_ipv4
-							ue.(*ueInfos).DownlinkTeid = teid_downlink
-							ue.(*ueInfos).Unlock()
+							if ue.(*ueInfos).Pushed {
+								if gnb_ipv4 == ue.(*ueInfos).Gnb && teid_downlink == ue.(*ueInfos).DownlinkTeid {
+									return nil // old info
+								}
+								addr, err := netip.ParseAddr(gnb_ipv4)
+								if err != nil {
+									return nil
+								}
+								logrus.WithFields(logrus.Fields{
+									"teid-downlink": teid_downlink,
+									"addr-downlink": gnb_ipv4,
+									"ue-ipv4":       ue_ipv4,
+								}).Debug("Updating UeInfos with handoverInfos for downlink")
+								ue.(*ueInfos).Lock()
+								ue.(*ueInfos).HandoverInfos.DlTargetGnb = &jsonapi.Fteid{Teid: teid_downlink, Addr: addr}
+								ue.(*ueInfos).Unlock()
+							} else {
+								logrus.WithFields(logrus.Fields{
+									"gnb-ipv4":      gnb_ipv4,
+									"teid-downlink": teid_downlink,
+									"ue-ipv4":       ue_ipv4,
+								}).Debug("Updating UeInfos")
+								ue.(*ueInfos).Lock()
+								ue.(*ueInfos).Gnb = gnb_ipv4
+								ue.(*ueInfos).DownlinkTeid = teid_downlink
+								ue.(*ueInfos).Unlock()
+							}
 						} else if logrus.IsLevelEnabled(logrus.DebugLevel) {
 							logrus.WithFields(logrus.Fields{
 								"gnb-ipv4":      gnb_ipv4,
@@ -628,6 +830,7 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 		go func() {
 			defer wg.Done()
 			pusher.pushRTRRule(ctx, ip.(string))
+			pusher.pushHandoverAcrossAreas(ctx, ip.(string))
 			// TODO: check pushRTRRule return code and send pfcp error on failure
 		}()
 		return true
