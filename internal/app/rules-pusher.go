@@ -118,6 +118,15 @@ func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Clien
 	return nil, fmt.Errorf("No Location provided")
 }
 
+func gnbInArea(gnb netip.Addr, area []netip.Prefix) bool {
+	for _, area_prefix := range area {
+		if area_prefix.Contains(gnb) {
+			return true
+		}
+	}
+	return false
+}
+
 func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error {
 	i, ok := pusher.ues.Load(ue_ip)
 	if !ok {
@@ -168,6 +177,11 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 			// if no area is defined, create a new-one with only this gnb
 			area = []netip.Prefix{netip.PrefixFrom(gnb_addr, 32)}
 		}
+		// check infos.Gnb in area
+		if !gnbInArea(gnb_addr, area) {
+			continue
+		}
+
 		action := n4tosrv6.Action{
 			SRH: *srh,
 		}
@@ -210,6 +224,17 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 	}
 
 	for _, r := range pusher.downlink {
+		var area []netip.Prefix
+		if r.Area != nil {
+			area = *r.Area
+		} else {
+			// if no area is defined, create a new-one with only this gnb
+			area = []netip.Prefix{netip.PrefixFrom(gnb_addr, 32)}
+		}
+		// check infos.Gnb in area
+		if !gnbInArea(gnb_addr, area) {
+			continue
+		}
 		if len(r.SegmentsList) == 0 {
 			logrus.Error("Empty segments list for downlink")
 			return fmt.Errorf("Empty segments list for downlink")
@@ -351,6 +376,33 @@ func (pusher *RulesPusher) pushHandover(ctx context.Context, ue_ip string, hando
 
 func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcputil.MessageType, msg pfcp_networking.ReceivedMessage, e *pfcp_networking.PFCPEntityUP) {
 	logrus.Debug("Into updateRoutersRules")
+	// detect handover with indirect forwarding
+
+	// 1. Establishment request:
+	// 1.1. new PDR UL (srgw1+teid)
+	// 1.2 FAR to edge
+	// -> we have UE ip and UL fteid, but we don't have gnb DL fteid yet
+	// => we don't know the area of the UE
+	// * store ul_fteids[ue_ip] = this ul fteid
+
+	// 2. Modification request:
+	// 2.1 PDR new fteid srgw1+teid (forw)
+	// 2.2 FAR gnbl3
+	// -> we don't have UE ip, we have a forw fteid
+
+	// 3. Modification request:
+	// 3.1 PDR new fteid srgw0+teid (forw)
+	// 3.2 FAR srgw1+teid
+	// -> we don't have UE ip, we have the forw fteid from step 2, we have the gnb fteid
+
+	// 4. Modification request:
+	// 4.1. PDR match UE
+	// 4.2. FAR to gnbl3
+	// -> we have the UE ip, we have the gnb DL fteid
+	// => we know the area of the UE
+	// * establish UL using fteid from step 1
+	// * establish DL using fteid from step 4
+
 	if msgType == message.MsgTypeSessionModificationRequest {
 		logrus.Debug("session modification request")
 		// check if handover
@@ -359,6 +411,8 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 			logrus.Error("could not cast to sessionModifationRequest")
 			return
 		}
+
+		// detect handover with direct forwarding
 		logrus.Debug("checking session modification request for handover")
 		if (len(msgMod.CreatePDR) == 0) && (len(msgMod.UpdatePDR) == 0) && (len(msgMod.CreateFAR) == 0) && (len(msgMod.UpdateFAR) == 1) {
 			// this is only a far update, so it is probably an handover…
